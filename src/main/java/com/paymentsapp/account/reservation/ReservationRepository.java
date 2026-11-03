@@ -19,4 +19,13 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
               and r.createdAt >= :from
             """)
     BigDecimal usedSince(UUID userId, String operationType, OffsetDateTime from);
+
+    // Оборот счёта: сколько списано и зарезервировано с него с начала периода
+    @Query("""
+            select coalesce(sum(r.total), 0) from Reservation r
+            where r.accountId = :accountId
+              and r.status <> com.paymentsapp.account.reservation.ReservationStatus.RELEASED
+              and r.createdAt >= :from
+            """)
+    BigDecimal accountTurnoverSince(UUID accountId, OffsetDateTime from);
 }

@@ -37,21 +37,23 @@ public class ReservationService {
     private final AccountRepository accounts;
     private final ReservationRepository reservations;
     private final LimitRuleRepository limits;
+    private final AccountLimitsRepository accountLimits;
     private final Outbox outbox;
     private final Clock clock;
 
     @Autowired
     public ReservationService(UserRepository users, AccountRepository accounts, ReservationRepository reservations,
-                              LimitRuleRepository limits, Outbox outbox) {
-        this(users, accounts, reservations, limits, outbox, Clock.system(LIMITS_ZONE));
+                              LimitRuleRepository limits, AccountLimitsRepository accountLimits, Outbox outbox) {
+        this(users, accounts, reservations, limits, accountLimits, outbox, Clock.system(LIMITS_ZONE));
     }
 
     ReservationService(UserRepository users, AccountRepository accounts, ReservationRepository reservations,
-                       LimitRuleRepository limits, Outbox outbox, Clock clock) {
+                       LimitRuleRepository limits, AccountLimitsRepository accountLimits, Outbox outbox, Clock clock) {
         this.users = users;
         this.accounts = accounts;
         this.reservations = reservations;
         this.limits = limits;
+        this.accountLimits = accountLimits;
         this.outbox = outbox;
         this.clock = clock;
     }
@@ -84,9 +86,10 @@ public class ReservationService {
         }
 
         if (cmd.recipientAccountId() != null) {
-            checkRecipient(account, cmd.recipientAccountId());
+            checkRecipient(account, cmd.recipientAccountId(), cmd.amount());
         }
         checkLimits(cmd);
+        checkAccountLimits(account, cmd.amount().add(cmd.commission()));
 
         Reservation reservation = new Reservation(cmd.paymentId(), cmd.userId(), cmd.accountId(),
                 cmd.recipientAccountId(), cmd.operationType(), cmd.amount(), cmd.commission());
@@ -146,7 +149,7 @@ public class ReservationService {
     }
 
     // Принимать переводы может только активная карта в той же валюте; кошелёк — нет
-    private void checkRecipient(Account source, UUID recipientAccountId) {
+    private void checkRecipient(Account source, UUID recipientAccountId, BigDecimal amount) {
         Account recipient = accounts.findById(recipientAccountId)
                 .orElseThrow(() -> new ReservationException(RECIPIENT_INVALID, "Счёт получателя не найден"));
         if (recipient.getType() != AccountType.CARD) {
@@ -160,6 +163,32 @@ public class ReservationService {
         }
         if (!recipient.getCurrency().equals(source.getCurrency())) {
             throw new ReservationException(CURRENCY_MISMATCH, "Валюта карты получателя другая");
+        }
+        // Максимальный остаток проверяем при резерве: после процессинга отказать в зачислении уже нельзя
+        BigDecimal maxBalance = accountLimits.findById(recipientAccountId).map(AccountLimits::getMaxBalance).orElse(null);
+        if (maxBalance != null && recipient.getBalance().add(amount).compareTo(maxBalance) > 0) {
+            throw new ReservationException(RECIPIENT_LIMIT_EXCEEDED,
+                    "Превышен максимальный остаток на счёте получателя: " + rub(maxBalance));
+        }
+    }
+
+    // Лимиты счёта списания: сумма платежа и оборот за календарный месяц (вместе с комиссией)
+    private void checkAccountLimits(Account account, BigDecimal total) {
+        AccountLimits l = accountLimits.findById(account.getId()).orElse(null);
+        if (l == null) {
+            return;
+        }
+        if (l.getMaxPayment() != null && total.compareTo(l.getMaxPayment()) > 0) {
+            throw new ReservationException(LIMIT_EXCEEDED, "Превышена максимальная сумма платежа: " + rub(l.getMaxPayment()));
+        }
+        if (l.getMaxMonthlyTurnover() != null) {
+            BigDecimal used = reservations.accountTurnoverSince(account.getId(),
+                    startOf(LocalDate.now(clock).withDayOfMonth(1)));
+            if (used.add(total).compareTo(l.getMaxMonthlyTurnover()) > 0) {
+                throw new ReservationException(LIMIT_EXCEEDED, "Превышена максимальная сумма операций в месяц: "
+                        + rub(l.getMaxMonthlyTurnover()) + ", доступно ещё "
+                        + rub(l.getMaxMonthlyTurnover().subtract(used).max(BigDecimal.ZERO)));
+            }
         }
     }
 
@@ -192,6 +221,9 @@ public class ReservationService {
 
     private static String rub(BigDecimal value) {
         NumberFormat format = NumberFormat.getNumberInstance(Locale.forLanguageTag("ru"));
+        // 50 000 ₽, но 33 739,30 ₽
+        boolean whole = value.stripTrailingZeros().scale() <= 0;
+        format.setMinimumFractionDigits(whole ? 0 : 2);
         format.setMaximumFractionDigits(2);
         return format.format(value) + " ₽";
     }
