@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReservationService {
 
     public static final String TOPIC = "account.reservations";
+    static final String OWN_TRANSFER = "OWN_TRANSFER";
     // Дневной и месячный лимиты считаем по московскому времени
     private static final ZoneId LIMITS_ZONE = ZoneId.of("Europe/Moscow");
 
@@ -86,7 +87,7 @@ public class ReservationService {
         }
 
         if (cmd.recipientAccountId() != null) {
-            checkRecipient(account, cmd.recipientAccountId(), cmd.amount());
+            checkRecipient(account, cmd.recipientAccountId(), cmd.amount(), OWN_TRANSFER.equals(cmd.operationType()));
         }
         checkLimits(cmd);
         checkAccountLimits(account, cmd.amount().add(cmd.commission()));
@@ -149,22 +150,26 @@ public class ReservationService {
     }
 
     // Принимать переводы может только активная карта в той же валюте; кошелёк — нет
-    private void checkRecipient(Account source, UUID recipientAccountId, BigDecimal amount) {
+    // Чужие переводы принимает только карта; между своими счетами можно и на «Мой кошелёк», но только себе
+    private void checkRecipient(Account source, UUID recipientAccountId, BigDecimal amount, boolean ownTransfer) {
         Account recipient = accounts.findById(recipientAccountId)
                 .orElseThrow(() -> new ReservationException(RECIPIENT_INVALID, "Счёт получателя не найден"));
-        if (recipient.getType() != AccountType.CARD) {
+        if (ownTransfer && !recipient.getUserId().equals(source.getUserId())) {
+            throw new ReservationException(RECIPIENT_INVALID, "Счёт зачисления принадлежит другому пользователю");
+        }
+        if (!ownTransfer && recipient.getType() != AccountType.CARD) {
             throw new ReservationException(RECIPIENT_INVALID, "Переводить можно только на карту");
         }
         if (recipient.getStatus() != AccountStatus.ACTIVE) {
-            throw new ReservationException(RECIPIENT_INVALID, "Карта получателя заблокирована");
+            throw new ReservationException(RECIPIENT_INVALID, "Счёт получателя заблокирован");
         }
         if (recipient.getId().equals(source.getId())) {
-            throw new ReservationException(RECIPIENT_INVALID, "Нельзя перевести на ту же карту");
+            throw new ReservationException(RECIPIENT_INVALID, "Нельзя перевести на тот же счёт");
         }
         if (!recipient.getCurrency().equals(source.getCurrency())) {
             throw new ReservationException(CURRENCY_MISMATCH, "Валюта карты получателя другая");
         }
-        // Максимальный остаток проверяем при резерве: после процессинга отказать в зачислении уже нельзя
+        // Максимальный остаток проверяем при резерве: после списания отказать в зачислении уже нельзя
         BigDecimal maxBalance = accountLimits.findById(recipientAccountId).map(AccountLimits::getMaxBalance).orElse(null);
         if (maxBalance != null && recipient.getBalance().add(amount).compareTo(maxBalance) > 0) {
             throw new ReservationException(RECIPIENT_LIMIT_EXCEEDED,
