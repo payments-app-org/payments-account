@@ -23,3 +23,6 @@ databaseChangeLog:
   - include:
       file: changes/008-close-linked-cards.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/009-account-numbers.sql
+      relativeToChangelogFile: true

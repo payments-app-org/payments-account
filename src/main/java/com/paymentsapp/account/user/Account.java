@@ -35,6 +35,7 @@ public class Account {
     private String paymentSystem;
     private boolean isDefault;
     private String cardExpiry;
+    private String accountNumber;
     private String cardFingerprint;
     private OffsetDateTime createdAt;
 
@@ -101,7 +102,11 @@ public class Account {
     }
 
     // Входящий перевод от другого клиента
+    // На привязанную карту другого банка деньги доставляет процессинг — у нас её баланс не ведём
     public void credit(BigDecimal amount) {
+        if (isExternal()) {
+            return;
+        }
         balance = balance.add(amount);
     }
 
@@ -118,5 +123,6 @@ public class Account {
     public String getPaymentSystem() { return paymentSystem; }
     public boolean isDefault() { return isDefault; }
     public String getCardExpiry() { return cardExpiry; }
+    public String getAccountNumber() { return accountNumber; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
 }

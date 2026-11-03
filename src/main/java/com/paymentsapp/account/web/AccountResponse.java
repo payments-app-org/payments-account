@@ -22,6 +22,9 @@ public record AccountResponse(
         // Инструмент оплаты по умолчанию — подставляется в «Списать с»
         boolean defaultForPayments,
         String cardExpiry,
+        // Номер счёта (20 цифр) — для справок; у карт других банков его нет
+        String accountNumber,
+        java.time.OffsetDateTime openedAt,
         Limits limits
 ) {
 
@@ -30,7 +33,7 @@ public record AccountResponse(
         // Баланс карты другого банка нам неизвестен
         return new AccountResponse(a.getId(), a.getType(), a.getStatus(), a.getTitle(), a.isExternal() ? null : a.getBalance(),
                 a.available(), a.getCurrency(), a.getCardLast4(), a.getPaymentSystem(), a.isDefault(), defaultForPayments,
-                a.getCardExpiry(), limits);
+                a.getCardExpiry(), a.getAccountNumber(), a.getCreatedAt(), limits);
     }
 
     // null в поле — без ограничения

@@ -159,7 +159,8 @@ public class ReservationService {
         if (ownTransfer && !recipient.getUserId().equals(source.getUserId())) {
             throw new ReservationException(RECIPIENT_INVALID, "Счёт зачисления принадлежит другому пользователю");
         }
-        if (recipient.isExternal()) {
+        // На свою привязанную карту другого банка перевести можно (доставит процессинг), на чужую — нет
+        if (recipient.isExternal() && !ownTransfer) {
             throw new ReservationException(RECIPIENT_INVALID, "Зачислить на карту другого банка отсюда нельзя");
         }
         if (!ownTransfer && recipient.getType() != AccountType.CARD) {
