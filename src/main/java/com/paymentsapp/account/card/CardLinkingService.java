@@ -2,6 +2,8 @@ package com.paymentsapp.account.card;
 
 import com.paymentsapp.account.reservation.AccountLimits;
 import com.paymentsapp.account.reservation.AccountLimitsRepository;
+import com.paymentsapp.account.reservation.ReservationRepository;
+import com.paymentsapp.account.reservation.ReservationStatus;
 import com.paymentsapp.account.user.Account;
 import com.paymentsapp.account.user.AccountRepository;
 import com.paymentsapp.account.user.AccountStatus;
@@ -37,11 +39,14 @@ public class CardLinkingService {
     private final UserRepository users;
     private final AccountRepository accounts;
     private final AccountLimitsRepository limits;
+    private final ReservationRepository reservations;
 
-    public CardLinkingService(UserRepository users, AccountRepository accounts, AccountLimitsRepository limits) {
+    public CardLinkingService(UserRepository users, AccountRepository accounts, AccountLimitsRepository limits,
+                              ReservationRepository reservations) {
         this.users = users;
         this.accounts = accounts;
         this.limits = limits;
+        this.reservations = reservations;
     }
 
     // CVC только проверяем на формат и нигде не сохраняем; номер карты храним отпечатком и последними цифрами
@@ -67,16 +72,35 @@ public class CardLinkingService {
             throw bad(HttpStatus.UNPROCESSABLE_CONTENT, "Это карта нашего банка — привязывать её не нужно");
         }
         String fingerprint = sha256(pan);
-        if (accounts.existsByUserIdAndCardFingerprint(userId, fingerprint)) {
+        if (accounts.existsByUserIdAndCardFingerprintAndStatusNot(userId, fingerprint, AccountStatus.CLOSED)) {
             throw bad(HttpStatus.CONFLICT, "Эта карта уже привязана");
         }
-        if (accounts.countByUserIdAndType(userId, AccountType.EXTERNAL_CARD) >= MAX_LINKED_CARDS) {
+        if (accounts.countByUserIdAndTypeAndStatusNot(userId, AccountType.EXTERNAL_CARD, AccountStatus.CLOSED) >= MAX_LINKED_CARDS) {
             throw bad(HttpStatus.UNPROCESSABLE_CONTENT, "Можно привязать не больше " + MAX_LINKED_CARDS + " карт");
         }
         Account card = accounts.save(Account.linkedCard(userId, pan.substring(pan.length() - 4), paymentSystem(pan),
                 expiry.trim(), fingerprint));
         limits.save(new AccountLimits(card.getId(), LINKED_MAX_PAYMENT, null, LINKED_MAX_MONTHLY));
         return card;
+    }
+
+    // Отвязать карту другого банка. Карты нашего банка и кошелёк так не удаляются.
+    @Transactional
+    public void unlink(UUID userId, UUID accountId) {
+        User user = users.findByIdForUpdate(userId).orElseThrow(() -> bad(HttpStatus.NOT_FOUND, "Пользователь не найден"));
+        Account card = accounts.findByIdForUpdate(accountId)
+                .filter(a -> a.getUserId().equals(userId) && a.getStatus() != AccountStatus.CLOSED)
+                .orElseThrow(() -> bad(HttpStatus.NOT_FOUND, "Карта не найдена"));
+        if (card.getType() != AccountType.EXTERNAL_CARD) {
+            throw bad(HttpStatus.UNPROCESSABLE_CONTENT, "Отвязать можно только карту другого банка");
+        }
+        if (reservations.existsByAccountIdAndStatus(accountId, ReservationStatus.RESERVED)) {
+            throw bad(HttpStatus.CONFLICT, "По карте есть незавершённый перевод, попробуйте позже");
+        }
+        card.close();
+        if (accountId.equals(user.getDefaultPaymentAccountId())) {
+            user.setDefaultPaymentAccount(null);
+        }
     }
 
     @Transactional

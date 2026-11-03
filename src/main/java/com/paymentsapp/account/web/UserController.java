@@ -5,6 +5,7 @@ import com.paymentsapp.account.reservation.AccountLimits;
 import com.paymentsapp.account.reservation.AccountLimitsRepository;
 import com.paymentsapp.account.user.Account;
 import com.paymentsapp.account.user.AccountRepository;
+import com.paymentsapp.account.user.AccountStatus;
 import com.paymentsapp.account.user.AccountType;
 import com.paymentsapp.account.user.User;
 import com.paymentsapp.account.user.UserRepository;
@@ -15,6 +16,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -65,6 +67,13 @@ public class UserController {
         return AccountResponse.of(card, limits.findById(card.getId()).orElse(null), false);
     }
 
+    // Отвязать карту другого банка
+    @DeleteMapping("/{userId}/linked-cards/{accountId}")
+    public List<AccountResponse> unlinkCard(@PathVariable UUID userId, @PathVariable UUID accountId) {
+        cards.unlink(userId, accountId);
+        return accountsOf(userId);
+    }
+
     // «Сердечко»: этот счёт подставляется в «Списать с» по умолчанию
     @PutMapping("/{userId}/default-payment-account")
     public List<AccountResponse> setDefaultPaymentAccount(@PathVariable UUID userId, @RequestBody DefaultPaymentRequest req) {
@@ -79,7 +88,9 @@ public class UserController {
 
     private List<AccountResponse> accountsOf(UUID userId) {
         UUID paymentDefault = users.findById(userId).map(User::getDefaultPaymentAccountId).orElse(null);
-        List<Account> list = accounts.findByUserIdOrderByTypeDescCreatedAt(userId).stream().sorted(ORDER).toList();
+        // Закрытые (отвязанные) карты не показываем
+        List<Account> list = accounts.findByUserIdOrderByTypeDescCreatedAt(userId).stream()
+                .filter(a -> a.getStatus() != AccountStatus.CLOSED).sorted(ORDER).toList();
         Map<java.util.UUID, AccountLimits> byAccount = limits.findAllById(list.stream().map(Account::getId).toList())
                 .stream().collect(Collectors.toMap(AccountLimits::getAccountId, Function.identity()));
         return list.stream()

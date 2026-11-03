@@ -2,5 +2,7 @@ package com.paymentsapp.account.user;
 
 public enum AccountStatus {
     ACTIVE,
-    BLOCKED
+    BLOCKED,
+    // Отвязанная карта другого банка: не показывается и не используется
+    CLOSED
 }

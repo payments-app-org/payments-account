@@ -96,6 +96,10 @@ public class Account {
         balance = balance.subtract(total);
     }
 
+    public void close() {
+        status = AccountStatus.CLOSED;
+    }
+
     // Входящий перевод от другого клиента
     public void credit(BigDecimal amount) {
         balance = balance.add(amount);

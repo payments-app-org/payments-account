@@ -20,3 +20,6 @@ databaseChangeLog:
   - include:
       file: changes/007-linked-cards-and-payment-default.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/008-close-linked-cards.sql
+      relativeToChangelogFile: true

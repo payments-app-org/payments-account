@@ -80,7 +80,8 @@ public class ReservationService {
             throw new ReservationException(ACCOUNT_NOT_OWNED, "Счёт принадлежит другому пользователю");
         }
         if (account.getStatus() != AccountStatus.ACTIVE) {
-            throw new ReservationException(ACCOUNT_BLOCKED, "Счёт заблокирован");
+            throw new ReservationException(ACCOUNT_BLOCKED,
+                    account.getStatus() == AccountStatus.CLOSED ? "Карта отвязана" : "Счёт заблокирован");
         }
         if (!account.getCurrency().equals(cmd.currency())) {
             throw new ReservationException(CURRENCY_MISMATCH, "Валюта счёта не совпадает с валютой платежа");

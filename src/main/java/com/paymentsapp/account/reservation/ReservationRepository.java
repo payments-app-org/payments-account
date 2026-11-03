@@ -11,6 +11,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
 
     Optional<Reservation> findByPaymentId(UUID paymentId);
 
+    // Есть ли незавершённые платежи со счёта
+    boolean existsByAccountIdAndStatus(UUID accountId, ReservationStatus status);
+
     // Сколько лимита уже израсходовано: снятые резервы не считаются
     @Query("""
             select coalesce(sum(r.amount), 0) from Reservation r
