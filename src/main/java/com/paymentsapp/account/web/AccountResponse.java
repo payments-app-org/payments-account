@@ -17,14 +17,20 @@ public record AccountResponse(
         String currency,
         String cardLast4,
         String paymentSystem,
+        // Карта по умолчанию для входящих переводов
         boolean isDefault,
+        // Инструмент оплаты по умолчанию — подставляется в «Списать с»
+        boolean defaultForPayments,
+        String cardExpiry,
         Limits limits
 ) {
 
-    static AccountResponse of(Account a, AccountLimits l) {
+    static AccountResponse of(Account a, AccountLimits l, boolean defaultForPayments) {
         Limits limits = l == null ? null : new Limits(l.getMaxPayment(), l.getMaxBalance(), l.getMaxMonthlyTurnover());
-        return new AccountResponse(a.getId(), a.getType(), a.getStatus(), a.getTitle(), a.getBalance(),
-                a.available(), a.getCurrency(), a.getCardLast4(), a.getPaymentSystem(), a.isDefault(), limits);
+        // Баланс карты другого банка нам неизвестен
+        return new AccountResponse(a.getId(), a.getType(), a.getStatus(), a.getTitle(), a.isExternal() ? null : a.getBalance(),
+                a.available(), a.getCurrency(), a.getCardLast4(), a.getPaymentSystem(), a.isDefault(), defaultForPayments,
+                a.getCardExpiry(), limits);
     }
 
     // null в поле — без ограничения

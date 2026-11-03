@@ -21,6 +21,13 @@ public class AccountLimits {
     protected AccountLimits() {
     }
 
+    public AccountLimits(UUID accountId, BigDecimal maxPayment, BigDecimal maxBalance, BigDecimal maxMonthlyTurnover) {
+        this.accountId = accountId;
+        this.maxPayment = maxPayment;
+        this.maxBalance = maxBalance;
+        this.maxMonthlyTurnover = maxMonthlyTurnover;
+    }
+
     public UUID getAccountId() { return accountId; }
     public BigDecimal getMaxPayment() { return maxPayment; }
     public BigDecimal getMaxBalance() { return maxBalance; }

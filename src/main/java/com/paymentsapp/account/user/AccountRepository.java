@@ -15,6 +15,10 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     Optional<Account> findByUserIdAndIsDefaultTrue(UUID userId);
 
+    boolean existsByUserIdAndCardFingerprint(UUID userId, String cardFingerprint);
+
+    long countByUserIdAndType(UUID userId, AccountType type);
+
     Optional<Account> findByCardNumberAndType(String cardNumber, AccountType type);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

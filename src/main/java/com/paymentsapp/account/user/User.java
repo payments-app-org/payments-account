@@ -25,6 +25,8 @@ public class User {
     private Subscription subscription;
 
     private String sbpDefaultBankId;
+    private UUID defaultPaymentAccountId;
+    private String identificationLevel;
 
     private OffsetDateTime createdAt;
 
@@ -45,5 +47,11 @@ public class User {
     public String getEmail() { return email; }
     public Subscription getSubscription() { return subscription; }
     public String getSbpDefaultBankId() { return sbpDefaultBankId; }
+    public UUID getDefaultPaymentAccountId() { return defaultPaymentAccountId; }
+    public String getIdentificationLevel() { return identificationLevel; }
+
+    public void setDefaultPaymentAccount(UUID accountId) {
+        this.defaultPaymentAccountId = accountId;
+    }
     public OffsetDateTime getCreatedAt() { return createdAt; }
 }

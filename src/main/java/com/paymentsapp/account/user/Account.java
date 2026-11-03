@@ -34,16 +34,46 @@ public class Account {
     private String cardLast4;
     private String paymentSystem;
     private boolean isDefault;
+    private String cardExpiry;
+    private String cardFingerprint;
     private OffsetDateTime createdAt;
 
     protected Account() {
     }
 
+    // Привязка карты другого банка
+    public static Account linkedCard(UUID userId, String last4, String paymentSystem, String expiry, String fingerprint) {
+        Account a = new Account();
+        a.id = UUID.randomUUID();
+        a.userId = userId;
+        a.type = AccountType.EXTERNAL_CARD;
+        a.status = AccountStatus.ACTIVE;
+        a.title = "Карта другого банка";
+        a.balance = BigDecimal.ZERO;
+        a.reserved = BigDecimal.ZERO;
+        a.currency = "RUB";
+        a.cardLast4 = last4;
+        a.paymentSystem = paymentSystem;
+        a.cardExpiry = expiry;
+        a.cardFingerprint = fingerprint;
+        a.createdAt = OffsetDateTime.now();
+        return a;
+    }
+
+    // Деньги на привязанной карте другого банка мы не ведём: их списывает процессинг
+    public boolean isExternal() {
+        return type == AccountType.EXTERNAL_CARD;
+    }
+
+    // null — баланс неизвестен (карта другого банка)
     public BigDecimal available() {
-        return balance.subtract(reserved);
+        return isExternal() ? null : balance.subtract(reserved);
     }
 
     public void reserve(BigDecimal total) {
+        if (isExternal()) {
+            return;
+        }
         if (available().compareTo(total) < 0) {
             throw new IllegalStateException("Недостаточно средств на счёте " + id);
         }
@@ -51,11 +81,17 @@ public class Account {
     }
 
     public void release(BigDecimal total) {
+        if (isExternal()) {
+            return;
+        }
         reserved = reserved.subtract(total);
     }
 
     // Резерв превращается в списание: уходит и из reserved, и из balance
     public void capture(BigDecimal total) {
+        if (isExternal()) {
+            return;
+        }
         reserved = reserved.subtract(total);
         balance = balance.subtract(total);
     }
@@ -77,5 +113,6 @@ public class Account {
     public String getCardLast4() { return cardLast4; }
     public String getPaymentSystem() { return paymentSystem; }
     public boolean isDefault() { return isDefault; }
+    public String getCardExpiry() { return cardExpiry; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
 }

@@ -94,7 +94,8 @@ public class ReservationService {
 
         Reservation reservation = new Reservation(cmd.paymentId(), cmd.userId(), cmd.accountId(),
                 cmd.recipientAccountId(), cmd.operationType(), cmd.amount(), cmd.commission());
-        if (account.available().compareTo(reservation.getTotal()) < 0) {
+        // С карты другого банка деньги списывает процессинг — её баланс мы не проверяем
+        if (!account.isExternal() && account.available().compareTo(reservation.getTotal()) < 0) {
             throw new ReservationException(INSUFFICIENT_FUNDS, "Недостаточно средств");
         }
         account.reserve(reservation.getTotal());
@@ -156,6 +157,9 @@ public class ReservationService {
                 .orElseThrow(() -> new ReservationException(RECIPIENT_INVALID, "Счёт получателя не найден"));
         if (ownTransfer && !recipient.getUserId().equals(source.getUserId())) {
             throw new ReservationException(RECIPIENT_INVALID, "Счёт зачисления принадлежит другому пользователю");
+        }
+        if (recipient.isExternal()) {
+            throw new ReservationException(RECIPIENT_INVALID, "Зачислить на карту другого банка отсюда нельзя");
         }
         if (!ownTransfer && recipient.getType() != AccountType.CARD) {
             throw new ReservationException(RECIPIENT_INVALID, "Переводить можно только на карту");

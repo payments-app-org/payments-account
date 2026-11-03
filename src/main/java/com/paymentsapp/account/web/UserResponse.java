@@ -15,11 +15,13 @@ public record UserResponse(
         String email,
         Subscription subscription,
         String sbpDefaultBankId,
+        java.util.UUID defaultPaymentAccountId,
+        String identificationLevel,
         List<AccountResponse> accounts
 ) {
 
     static UserResponse of(User u, List<AccountResponse> accounts) {
         return new UserResponse(u.getId(), u.getFirstName(), u.getLastName(), u.getMiddleName(), u.displayName(),
-                u.getPhone(), u.getEmail(), u.getSubscription(), u.getSbpDefaultBankId(), accounts);
+                u.getPhone(), u.getEmail(), u.getSubscription(), u.getSbpDefaultBankId(), u.getDefaultPaymentAccountId(), u.getIdentificationLevel(), accounts);
     }
 }
