@@ -10,14 +10,16 @@ public record UserResponse(
         String firstName,
         String lastName,
         String middleName,
+        String displayName,
         String phone,
         String email,
         Subscription subscription,
+        String sbpDefaultBankId,
         List<AccountResponse> accounts
 ) {
 
     static UserResponse of(User u, List<AccountResponse> accounts) {
-        return new UserResponse(u.getId(), u.getFirstName(), u.getLastName(), u.getMiddleName(),
-                u.getPhone(), u.getEmail(), u.getSubscription(), accounts);
+        return new UserResponse(u.getId(), u.getFirstName(), u.getLastName(), u.getMiddleName(), u.displayName(),
+                u.getPhone(), u.getEmail(), u.getSubscription(), u.getSbpDefaultBankId(), accounts);
     }
 }

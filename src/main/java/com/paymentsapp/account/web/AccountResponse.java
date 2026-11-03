@@ -15,11 +15,12 @@ public record AccountResponse(
         BigDecimal available,
         String currency,
         String cardLast4,
-        String paymentSystem
+        String paymentSystem,
+        boolean isDefault
 ) {
 
     static AccountResponse of(Account a) {
         return new AccountResponse(a.getId(), a.getType(), a.getStatus(), a.getTitle(), a.getBalance(),
-                a.available(), a.getCurrency(), a.getCardLast4(), a.getPaymentSystem());
+                a.available(), a.getCurrency(), a.getCardLast4(), a.getPaymentSystem(), a.isDefault());
     }
 }

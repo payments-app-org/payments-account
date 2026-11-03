@@ -33,6 +33,7 @@ public class Account {
     private String cardNumber;
     private String cardLast4;
     private String paymentSystem;
+    private boolean isDefault;
     private OffsetDateTime createdAt;
 
     protected Account() {
@@ -59,6 +60,11 @@ public class Account {
         balance = balance.subtract(total);
     }
 
+    // Входящий перевод от другого клиента
+    public void credit(BigDecimal amount) {
+        balance = balance.add(amount);
+    }
+
     public UUID getId() { return id; }
     public UUID getUserId() { return userId; }
     public AccountType getType() { return type; }
@@ -70,5 +76,6 @@ public class Account {
     public String getCardNumber() { return cardNumber; }
     public String getCardLast4() { return cardLast4; }
     public String getPaymentSystem() { return paymentSystem; }
+    public boolean isDefault() { return isDefault; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
 }

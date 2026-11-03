@@ -8,3 +8,9 @@ databaseChangeLog:
   - include:
       file: changes/003-demo-user-cards.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/004-default-card-and-sbp-bank.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/005-reservation-recipient.sql
+      relativeToChangelogFile: true

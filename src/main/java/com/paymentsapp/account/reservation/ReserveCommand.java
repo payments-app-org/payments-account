@@ -7,6 +7,7 @@ public record ReserveCommand(
         UUID paymentId,
         UUID userId,
         UUID accountId,
+        UUID recipientAccountId,
         String operationType,
         BigDecimal amount,
         BigDecimal commission,

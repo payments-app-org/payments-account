@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
 
+    Optional<User> findByPhone(String phone);
+
     // Лимиты считаются по пользователю, а не по счёту — поэтому сериализуем операции на строке пользователя
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")

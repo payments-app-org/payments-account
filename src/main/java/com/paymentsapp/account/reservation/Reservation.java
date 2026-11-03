@@ -19,6 +19,8 @@ public class Reservation {
     private UUID paymentId;
     private UUID userId;
     private UUID accountId;
+    // Карта нашего клиента-получателя; null — перевод во внешний банк
+    private UUID recipientAccountId;
     private String operationType;
     private BigDecimal amount;
     private BigDecimal commission;
@@ -33,12 +35,13 @@ public class Reservation {
     protected Reservation() {
     }
 
-    public Reservation(UUID paymentId, UUID userId, UUID accountId, String operationType,
+    public Reservation(UUID paymentId, UUID userId, UUID accountId, UUID recipientAccountId, String operationType,
                        BigDecimal amount, BigDecimal commission) {
         this.id = UUID.randomUUID();
         this.paymentId = paymentId;
         this.userId = userId;
         this.accountId = accountId;
+        this.recipientAccountId = recipientAccountId;
         this.operationType = operationType;
         this.amount = amount;
         this.commission = commission;
@@ -49,8 +52,10 @@ public class Reservation {
     }
 
     // Тот же платёж пришёл повторно — параметры должны совпасть
-    public boolean sameRequest(UUID userId, UUID accountId, BigDecimal amount, BigDecimal commission) {
+    public boolean sameRequest(UUID userId, UUID accountId, UUID recipientAccountId, BigDecimal amount,
+                               BigDecimal commission) {
         return this.userId.equals(userId) && this.accountId.equals(accountId)
+                && java.util.Objects.equals(this.recipientAccountId, recipientAccountId)
                 && this.amount.compareTo(amount) == 0 && this.commission.compareTo(commission) == 0;
     }
 
@@ -63,6 +68,7 @@ public class Reservation {
     public UUID getPaymentId() { return paymentId; }
     public UUID getUserId() { return userId; }
     public UUID getAccountId() { return accountId; }
+    public UUID getRecipientAccountId() { return recipientAccountId; }
     public String getOperationType() { return operationType; }
     public BigDecimal getAmount() { return amount; }
     public BigDecimal getCommission() { return commission; }

@@ -6,6 +6,7 @@ import com.paymentsapp.account.outbox.Outbox;
 import com.paymentsapp.account.user.Account;
 import com.paymentsapp.account.user.AccountRepository;
 import com.paymentsapp.account.user.AccountStatus;
+import com.paymentsapp.account.user.AccountType;
 import com.paymentsapp.account.user.UserRepository;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
@@ -13,8 +14,11 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -61,7 +65,7 @@ public class ReservationService {
         var existing = reservations.findByPaymentId(cmd.paymentId());
         if (existing.isPresent()) {
             Reservation r = existing.get();
-            if (!r.sameRequest(cmd.userId(), cmd.accountId(), cmd.amount(), cmd.commission())) {
+            if (!r.sameRequest(cmd.userId(), cmd.accountId(), cmd.recipientAccountId(), cmd.amount(), cmd.commission())) {
                 throw new ReservationException(RESERVATION_CONFLICT, "Платёж уже зарезервирован с другими параметрами");
             }
             return r;
@@ -79,10 +83,13 @@ public class ReservationService {
             throw new ReservationException(CURRENCY_MISMATCH, "Валюта счёта не совпадает с валютой платежа");
         }
 
+        if (cmd.recipientAccountId() != null) {
+            checkRecipient(account, cmd.recipientAccountId());
+        }
         checkLimits(cmd);
 
         Reservation reservation = new Reservation(cmd.paymentId(), cmd.userId(), cmd.accountId(),
-                cmd.operationType(), cmd.amount(), cmd.commission());
+                cmd.recipientAccountId(), cmd.operationType(), cmd.amount(), cmd.commission());
         if (account.available().compareTo(reservation.getTotal()) < 0) {
             throw new ReservationException(INSUFFICIENT_FUNDS, "Недостаточно средств");
         }
@@ -115,7 +122,13 @@ public class ReservationService {
             case CAPTURED -> { return r; }
             case RELEASED -> throw new ReservationException(RESERVATION_CONFLICT, "Резерв уже снят, списать нельзя");
             case RESERVED -> {
-                accounts.findByIdForUpdate(r.getAccountId()).orElseThrow().capture(r.getTotal());
+                // Счета блокируем в порядке id: встречные переводы A→B и B→A не взаимоблокируются
+                Map<UUID, Account> locked = lockInOrder(r.getAccountId(), r.getRecipientAccountId());
+                locked.get(r.getAccountId()).capture(r.getTotal());
+                if (r.getRecipientAccountId() != null) {
+                    // Получатель — наш клиент: зачисляем сумму перевода без комиссии
+                    locked.get(r.getRecipientAccountId()).credit(r.getAmount());
+                }
                 r.changeStatus(ReservationStatus.CAPTURED);
                 publish("FundsCaptured", r);
                 return r;
@@ -130,6 +143,31 @@ public class ReservationService {
         // Та же блокировка, что и при резервировании, — release и capture не пересекутся
         users.findByIdForUpdate(r.getUserId()).orElseThrow();
         return r;
+    }
+
+    // Принимать переводы может только активная карта в той же валюте; кошелёк — нет
+    private void checkRecipient(Account source, UUID recipientAccountId) {
+        Account recipient = accounts.findById(recipientAccountId)
+                .orElseThrow(() -> new ReservationException(RECIPIENT_INVALID, "Счёт получателя не найден"));
+        if (recipient.getType() != AccountType.CARD) {
+            throw new ReservationException(RECIPIENT_INVALID, "Переводить можно только на карту");
+        }
+        if (recipient.getStatus() != AccountStatus.ACTIVE) {
+            throw new ReservationException(RECIPIENT_INVALID, "Карта получателя заблокирована");
+        }
+        if (recipient.getId().equals(source.getId())) {
+            throw new ReservationException(RECIPIENT_INVALID, "Нельзя перевести на ту же карту");
+        }
+        if (!recipient.getCurrency().equals(source.getCurrency())) {
+            throw new ReservationException(CURRENCY_MISMATCH, "Валюта карты получателя другая");
+        }
+    }
+
+    private Map<UUID, Account> lockInOrder(UUID... ids) {
+        Map<UUID, Account> locked = new java.util.HashMap<>();
+        Stream.of(ids).filter(Objects::nonNull).distinct().sorted(Comparator.naturalOrder())
+                .forEach(id -> locked.put(id, accounts.findByIdForUpdate(id).orElseThrow()));
+        return locked;
     }
 
     private void checkLimits(ReserveCommand cmd) {
@@ -168,6 +206,7 @@ public class ReservationService {
                 "paymentId", r.getPaymentId(),
                 "userId", r.getUserId(),
                 "accountId", r.getAccountId(),
+                "recipientAccountId", Objects.toString(r.getRecipientAccountId(), ""),
                 "operationType", r.getOperationType(),
                 "amount", r.getAmount(),
                 "commission", r.getCommission(),

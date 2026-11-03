@@ -32,7 +32,7 @@ public class ReservationController {
     @PostMapping
     public ReservationResponse reserve(@Valid @RequestBody ReserveRequest req) {
         return ReservationResponse.of(service.reserve(new ReserveCommand(req.paymentId(), req.userId(),
-                req.accountId(), req.operationType(), req.amount(), req.commission(), req.currency())));
+                req.accountId(), req.recipientAccountId(), req.operationType(), req.amount(), req.commission(), req.currency())));
     }
 
     @PostMapping("/{paymentId}/release")
@@ -49,6 +49,7 @@ public class ReservationController {
             @NotNull UUID paymentId,
             @NotNull UUID userId,
             @NotNull UUID accountId,
+            UUID recipientAccountId,
             @NotBlank String operationType,
             @NotNull @Positive @Digits(integer = 15, fraction = 2) BigDecimal amount,
             @NotNull @PositiveOrZero @Digits(integer = 15, fraction = 2) BigDecimal commission,

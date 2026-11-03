@@ -13,6 +13,10 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     // Кошелёк первым, затем карты по дате оформления
     List<Account> findByUserIdOrderByTypeDescCreatedAt(UUID userId);
 
+    Optional<Account> findByUserIdAndIsDefaultTrue(UUID userId);
+
+    Optional<Account> findByCardNumberAndType(String cardNumber, AccountType type);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.id = :id")
     Optional<Account> findByIdForUpdate(UUID id);
