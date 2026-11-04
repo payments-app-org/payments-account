@@ -69,6 +69,36 @@ public class UserController {
         return AccountResponse.of(card, limits.findById(card.getId()).orElse(null), false);
     }
 
+    // «Округление на пользу»: включить с шагом и фондом / выключить
+    @PutMapping("/{userId}/roundup")
+    @org.springframework.transaction.annotation.Transactional
+    public UserResponse.Roundup enableRoundup(@PathVariable UUID userId, @RequestBody RoundupRequest req) {
+        com.paymentsapp.account.user.User u = users.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
+        if (req.step() == null || !java.util.Set.of(10, 100, 1000).contains(req.step())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Шаг округления — до 10, 100 или 1000 ₽");
+        }
+        if (req.fundCode() == null || req.fundCode().isBlank() || req.fundName() == null || req.fundName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите благотворительный фонд");
+        }
+        u.enableRoundup(req.step(), req.fundCode().trim(), req.fundName().trim());
+        users.save(u);
+        return UserResponse.Roundup.of(u);
+    }
+
+    @DeleteMapping("/{userId}/roundup")
+    @org.springframework.transaction.annotation.Transactional
+    public org.springframework.http.ResponseEntity<Void> disableRoundup(@PathVariable UUID userId) {
+        com.paymentsapp.account.user.User u = users.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
+        u.disableRoundup();
+        users.save(u);
+        return org.springframework.http.ResponseEntity.noContent().build();
+    }
+
+    public record RoundupRequest(Integer step, String fundCode, String fundName) {
+    }
+
     // «Ваш счёт в другом банке» для автопополнения по СБП: находим или заводим счёт-источник этого банка
     @PostMapping("/{userId}/sbp-sources")
     public AccountResponse sbpSource(@PathVariable UUID userId, @RequestBody SbpSourceRequest req) {

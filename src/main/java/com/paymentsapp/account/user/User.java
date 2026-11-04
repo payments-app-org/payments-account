@@ -30,6 +30,12 @@ public class User {
 
     private OffsetDateTime createdAt;
 
+    // «Округление на пользу»: шаг (10, 100, 1000 ₽) и благотворительный фонд; null — выключено
+    private Integer roundupStep;
+    private String roundupFundCode;
+    private String roundupFundName;
+    private OffsetDateTime roundupEnabledAt;
+
     protected User() {
     }
 
@@ -43,6 +49,24 @@ public class User {
     public String getFirstName() { return firstName; }
     public String getLastName() { return lastName; }
     public String getMiddleName() { return middleName; }
+    public Integer getRoundupStep() { return roundupStep; }
+    public String getRoundupFundCode() { return roundupFundCode; }
+    public String getRoundupFundName() { return roundupFundName; }
+    public OffsetDateTime getRoundupEnabledAt() { return roundupEnabledAt; }
+
+    public void enableRoundup(int step, String fundCode, String fundName) {
+        this.roundupStep = step;
+        this.roundupFundCode = fundCode;
+        this.roundupFundName = fundName;
+        this.roundupEnabledAt = OffsetDateTime.now();
+    }
+
+    public void disableRoundup() {
+        this.roundupStep = null;
+        this.roundupFundCode = null;
+        this.roundupFundName = null;
+        this.roundupEnabledAt = null;
+    }
     public String getPhone() { return phone; }
     public String getEmail() { return email; }
     public Subscription getSubscription() { return subscription; }

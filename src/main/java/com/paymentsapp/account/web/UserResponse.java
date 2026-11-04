@@ -17,11 +17,23 @@ public record UserResponse(
         String sbpDefaultBankId,
         java.util.UUID defaultPaymentAccountId,
         String identificationLevel,
-        List<AccountResponse> accounts
+        List<AccountResponse> accounts,
+        // «Округление на пользу»; null — выключено
+        Roundup roundup
 ) {
+
+    public record Roundup(int step, String fundCode, String fundName, java.time.OffsetDateTime enabledAt) {
+
+        static Roundup of(User u) {
+            return u.getRoundupStep() == null ? null
+                    : new Roundup(u.getRoundupStep(), u.getRoundupFundCode(), u.getRoundupFundName(), u.getRoundupEnabledAt());
+        }
+    }
+
 
     static UserResponse of(User u, List<AccountResponse> accounts) {
         return new UserResponse(u.getId(), u.getFirstName(), u.getLastName(), u.getMiddleName(), u.displayName(),
-                u.getPhone(), u.getEmail(), u.getSubscription(), u.getSbpDefaultBankId(), u.getDefaultPaymentAccountId(), u.getIdentificationLevel(), accounts);
+                u.getPhone(), u.getEmail(), u.getSubscription(), u.getSbpDefaultBankId(), u.getDefaultPaymentAccountId(), u.getIdentificationLevel(), accounts,
+                Roundup.of(u));
     }
 }
