@@ -31,6 +31,7 @@ public class ReservationService {
 
     public static final String TOPIC = "account.reservations";
     static final String OWN_TRANSFER = "OWN_TRANSFER";
+    static final String WALLET_TRANSFER = "WALLET_TRANSFER";
     // Дневной и месячный лимиты считаем по московскому времени
     private static final ZoneId LIMITS_ZONE = ZoneId.of("Europe/Moscow");
 
@@ -88,7 +89,7 @@ public class ReservationService {
         }
 
         if (cmd.recipientAccountId() != null) {
-            checkRecipient(account, cmd.recipientAccountId(), cmd.amount(), OWN_TRANSFER.equals(cmd.operationType()));
+            checkRecipient(account, cmd.recipientAccountId(), cmd.amount(), cmd.operationType());
         }
         checkLimits(cmd);
         checkAccountLimits(account, cmd.amount().add(cmd.commission()));
@@ -153,7 +154,10 @@ public class ReservationService {
 
     // Принимать переводы может только активная карта в той же валюте; кошелёк — нет
     // Чужие переводы принимает только карта; между своими счетами можно и на «Мой кошелёк», но только себе
-    private void checkRecipient(Account source, UUID recipientAccountId, BigDecimal amount, boolean ownTransfer) {
+    // Чужим переводам — только на карту; «на кошелёк» — только на чужой «Мой кошелёк»; между своими — на любой свой счёт
+    private void checkRecipient(Account source, UUID recipientAccountId, BigDecimal amount, String operationType) {
+        boolean ownTransfer = OWN_TRANSFER.equals(operationType);
+        boolean walletTransfer = WALLET_TRANSFER.equals(operationType);
         Account recipient = accounts.findById(recipientAccountId)
                 .orElseThrow(() -> new ReservationException(RECIPIENT_INVALID, "Счёт получателя не найден"));
         if (ownTransfer && !recipient.getUserId().equals(source.getUserId())) {
@@ -163,7 +167,10 @@ public class ReservationService {
         if (recipient.isExternal() && !ownTransfer) {
             throw new ReservationException(RECIPIENT_INVALID, "Зачислить на карту другого банка отсюда нельзя");
         }
-        if (!ownTransfer && recipient.getType() != AccountType.CARD) {
+        if (walletTransfer && recipient.getType() != AccountType.WALLET) {
+            throw new ReservationException(RECIPIENT_INVALID, "Перевод на кошелёк зачисляется только на «Мой кошелёк»");
+        }
+        if (!ownTransfer && !walletTransfer && recipient.getType() != AccountType.CARD) {
             throw new ReservationException(RECIPIENT_INVALID, "Переводить можно только на карту");
         }
         if (recipient.getStatus() != AccountStatus.ACTIVE) {

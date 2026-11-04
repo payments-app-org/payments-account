@@ -35,13 +35,15 @@ public class UserController {
     private final AccountRepository accounts;
     private final AccountLimitsRepository limits;
     private final CardLinkingService cards;
+    private final com.paymentsapp.account.reservation.LimitRuleRepository operationLimits;
 
     public UserController(UserRepository users, AccountRepository accounts, AccountLimitsRepository limits,
-                          CardLinkingService cards) {
+                          CardLinkingService cards, com.paymentsapp.account.reservation.LimitRuleRepository operationLimits) {
         this.users = users;
         this.accounts = accounts;
         this.limits = limits;
         this.cards = cards;
+        this.operationLimits = operationLimits;
     }
 
     @GetMapping("/{userId}")
@@ -65,6 +67,16 @@ public class UserController {
     public AccountResponse linkCard(@PathVariable UUID userId, @RequestBody LinkCardRequest req) {
         Account card = cards.link(userId, req.cardNumber(), req.expiry(), req.cvc());
         return AccountResponse.of(card, limits.findById(card.getId()).orElse(null), false);
+    }
+
+    // Лимиты пользователя на виды операций — для подсказки «от 10 ₽ до …» в формах
+    @GetMapping("/{userId}/operation-limits")
+    public List<OperationLimit> operationLimits(@PathVariable UUID userId) {
+        return operationLimits.findByUserId(userId).stream()
+                .map(l -> new OperationLimit(l.getOperationType(), l.getPeriod().name(), l.getMaxAmount())).toList();
+    }
+
+    public record OperationLimit(String operationType, String period, java.math.BigDecimal maxAmount) {
     }
 
     // Отвязать карту другого банка

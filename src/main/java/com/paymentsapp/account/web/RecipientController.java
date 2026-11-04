@@ -32,7 +32,10 @@ public class RecipientController {
     public RecipientResponse byPhone(@RequestParam String phone) {
         User user = users.findByPhone(phone).orElseThrow(RecipientController::notFound);
         UUID accountId = accounts.findByUserIdAndIsDefaultTrue(user.getId()).map(Account::getId).orElse(null);
-        return new RecipientResponse(user.getId(), user.displayName(), accountId, user.getSbpDefaultBankId());
+        // «Мой кошелёк» получателя — для перевода на кошелёк по номеру телефона
+        UUID walletId = accounts.findByUserIdOrderByTypeDescCreatedAt(user.getId()).stream()
+                .filter(a -> a.getType() == AccountType.WALLET).map(Account::getId).findFirst().orElse(null);
+        return new RecipientResponse(user.getId(), user.displayName(), accountId, user.getSbpDefaultBankId(), walletId);
     }
 
     // По номеру карты — ровно на эту карту
@@ -40,13 +43,13 @@ public class RecipientController {
     public RecipientResponse byCard(@RequestParam String cardNumber) {
         Account card = accounts.findByCardNumberAndType(cardNumber, AccountType.CARD).orElseThrow(RecipientController::notFound);
         User user = users.findById(card.getUserId()).orElseThrow();
-        return new RecipientResponse(user.getId(), user.displayName(), card.getId(), user.getSbpDefaultBankId());
+        return new RecipientResponse(user.getId(), user.displayName(), card.getId(), user.getSbpDefaultBankId(), null);
     }
 
     private static ResponseStatusException notFound() {
         return new ResponseStatusException(HttpStatus.NOT_FOUND, "Получатель не найден");
     }
 
-    public record RecipientResponse(UUID userId, String displayName, UUID accountId, String sbpBankId) {
+    public record RecipientResponse(UUID userId, String displayName, UUID accountId, String sbpBankId, UUID walletAccountId) {
     }
 }

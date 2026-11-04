@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface LimitRuleRepository extends JpaRepository<LimitRule, UUID> {
 
     List<LimitRule> findByUserIdAndOperationType(UUID userId, String operationType);
+
+    List<LimitRule> findByUserId(UUID userId);
 }

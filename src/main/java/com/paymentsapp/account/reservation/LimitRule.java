@@ -34,6 +34,7 @@ public class LimitRule {
         this.maxAmount = maxAmount;
     }
 
+    public String getOperationType() { return operationType; }
     public LimitPeriod getPeriod() { return period; }
     public BigDecimal getMaxAmount() { return maxAmount; }
 }
