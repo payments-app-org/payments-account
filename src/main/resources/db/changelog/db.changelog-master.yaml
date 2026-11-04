@@ -26,3 +26,6 @@ databaseChangeLog:
   - include:
       file: changes/009-account-numbers.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/010-demo-incomes.sql
+      relativeToChangelogFile: true
