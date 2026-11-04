@@ -25,7 +25,9 @@ public record AccountResponse(
         // Номер счёта (20 цифр) — для справок; у карт других банков его нет
         String accountNumber,
         java.time.OffsetDateTime openedAt,
-        Limits limits
+        Limits limits,
+        // Свой счёт в другом банке (EXTERNAL_SBP): идентификатор банка-участника СБП
+        String sbpBankId
 ) {
 
     static AccountResponse of(Account a, AccountLimits l, boolean defaultForPayments) {
@@ -33,7 +35,7 @@ public record AccountResponse(
         // Баланс карты другого банка нам неизвестен
         return new AccountResponse(a.getId(), a.getType(), a.getStatus(), a.getTitle(), a.isExternal() ? null : a.getBalance(),
                 a.available(), a.getCurrency(), a.getCardLast4(), a.getPaymentSystem(), a.isDefault(), defaultForPayments,
-                a.getCardExpiry(), a.getAccountNumber(), a.getCreatedAt(), limits);
+                a.getCardExpiry(), a.getAccountNumber(), a.getCreatedAt(), limits, a.getSbpBankId());
     }
 
     // null в поле — без ограничения

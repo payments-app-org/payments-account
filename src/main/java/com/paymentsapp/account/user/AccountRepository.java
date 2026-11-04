@@ -21,6 +21,8 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     Optional<Account> findByCardNumberAndType(String cardNumber, AccountType type);
 
+    Optional<Account> findByUserIdAndTypeAndSbpBankId(UUID userId, AccountType type, String sbpBankId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.id = :id")
     Optional<Account> findByIdForUpdate(UUID id);

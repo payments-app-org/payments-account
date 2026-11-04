@@ -69,6 +69,23 @@ public class UserController {
         return AccountResponse.of(card, limits.findById(card.getId()).orElse(null), false);
     }
 
+    // «Ваш счёт в другом банке» для автопополнения по СБП: находим или заводим счёт-источник этого банка
+    @PostMapping("/{userId}/sbp-sources")
+    public AccountResponse sbpSource(@PathVariable UUID userId, @RequestBody SbpSourceRequest req) {
+        if (!users.existsById(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден");
+        }
+        if (req.bankId() == null || !req.bankId().matches("\\d{12}") || req.bankName() == null || req.bankName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите банк");
+        }
+        Account a = accounts.findByUserIdAndTypeAndSbpBankId(userId, com.paymentsapp.account.user.AccountType.EXTERNAL_SBP, req.bankId())
+                .orElseGet(() -> accounts.save(Account.sbpSource(userId, req.bankId(), req.bankName().trim())));
+        return AccountResponse.of(a, null, false);
+    }
+
+    public record SbpSourceRequest(String bankId, String bankName) {
+    }
+
     // Лимиты пользователя на виды операций — для подсказки «от 10 ₽ до …» в формах
     @GetMapping("/{userId}/operation-limits")
     public List<OperationLimit> operationLimits(@PathVariable UUID userId) {

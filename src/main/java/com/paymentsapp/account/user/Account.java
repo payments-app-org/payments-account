@@ -32,6 +32,7 @@ public class Account {
     private String currency;
     private String cardNumber;
     private String cardLast4;
+    private String sbpBankId;
     private String paymentSystem;
     private boolean isDefault;
     private String cardExpiry;
@@ -61,9 +62,29 @@ public class Account {
         return a;
     }
 
-    // Деньги на привязанной карте другого банка мы не ведём: их списывает процессинг
+    // Свой счёт в другом банке — источник автопополнения по СБП
+    public static Account sbpSource(UUID userId, String bankId, String bankName) {
+        Account a = new Account();
+        a.id = UUID.randomUUID();
+        a.userId = userId;
+        a.type = AccountType.EXTERNAL_SBP;
+        a.status = AccountStatus.ACTIVE;
+        a.title = "Счёт в " + bankName;
+        a.balance = BigDecimal.ZERO;
+        a.reserved = BigDecimal.ZERO;
+        a.currency = "RUB";
+        a.sbpBankId = bankId;
+        a.createdAt = OffsetDateTime.now();
+        return a;
+    }
+
+    // Деньги на привязанной карте и на своём счёте в другом банке мы не ведём: их списывает процессинг
     public boolean isExternal() {
-        return type == AccountType.EXTERNAL_CARD;
+        return type == AccountType.EXTERNAL_CARD || type == AccountType.EXTERNAL_SBP;
+    }
+
+    public String getSbpBankId() {
+        return sbpBankId;
     }
 
     // null — баланс неизвестен (карта другого банка)
