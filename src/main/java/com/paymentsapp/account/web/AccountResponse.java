@@ -27,7 +27,9 @@ public record AccountResponse(
         java.time.OffsetDateTime openedAt,
         Limits limits,
         // Свой счёт в другом банке (EXTERNAL_SBP): идентификатор банка-участника СБП
-        String sbpBankId
+        String sbpBankId,
+        // Кредитная карта — с неё нельзя пополнить кошелёк
+        boolean credit
 ) {
 
     static AccountResponse of(Account a, AccountLimits l, boolean defaultForPayments) {
@@ -35,7 +37,7 @@ public record AccountResponse(
         // Баланс карты другого банка нам неизвестен
         return new AccountResponse(a.getId(), a.getType(), a.getStatus(), a.getTitle(), a.isExternal() ? null : a.getBalance(),
                 a.available(), a.getCurrency(), a.getCardLast4(), a.getPaymentSystem(), a.isDefault(), defaultForPayments,
-                a.getCardExpiry(), a.getAccountNumber(), a.getCreatedAt(), limits, a.getSbpBankId());
+                a.getCardExpiry(), a.getAccountNumber(), a.getCreatedAt(), limits, a.getSbpBankId(), a.isCredit());
     }
 
     // null в поле — без ограничения

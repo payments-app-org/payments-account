@@ -38,6 +38,8 @@ public class Account {
     private String cardExpiry;
     private String accountNumber;
     private String cardFingerprint;
+    // Кредитная карта: с неё нельзя пополнять электронные кошельки (161-ФЗ, ст. 7 ч. 9)
+    private boolean credit;
     private OffsetDateTime createdAt;
 
     protected Account() {
@@ -79,6 +81,10 @@ public class Account {
     }
 
     // Деньги на привязанной карте и на своём счёте в другом банке мы не ведём: их списывает процессинг
+    public boolean isCredit() {
+        return credit;
+    }
+
     public boolean isExternal() {
         return type == AccountType.EXTERNAL_CARD || type == AccountType.EXTERNAL_SBP;
     }

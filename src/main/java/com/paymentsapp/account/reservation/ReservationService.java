@@ -33,6 +33,15 @@ public class ReservationService {
     public static final String TOPIC = "account.reservations";
     static final String OWN_TRANSFER = "OWN_TRANSFER";
     static final String WALLET_TRANSFER = "WALLET_TRANSFER";
+    static final String ABROAD = "ABROAD";
+    // Переводы людям и по реквизитам — от 10 ₽ (документ «Переводы за рубеж», раздел о СБП, карте и реквизитах)
+    private static final java.util.Set<String> MIN_10 = java.util.Set.of("SBP_PHONE", "CARD2CARD", "REQUISITES", "REQUISITES_OUR");
+    private static final BigDecimal MIN_TRANSFER = BigDecimal.TEN;
+    // За рубеж без открытия счёта (с кошелька) и со счёта (с карты): на операцию и в месяц
+    private static final BigDecimal ABROAD_WALLET_SINGLE = BigDecimal.valueOf(300_000);
+    private static final BigDecimal ABROAD_WALLET_MONTH = BigDecimal.valueOf(400_000);
+    private static final BigDecimal ABROAD_CARD_SINGLE = BigDecimal.valueOf(400_000);
+    private static final BigDecimal ABROAD_CARD_MONTH = BigDecimal.valueOf(3_000_000);
     // Дневной и месячный лимиты считаем по московскому времени
     private static final ZoneId LIMITS_ZONE = ZoneId.of("Europe/Moscow");
 
@@ -90,7 +99,8 @@ public class ReservationService {
         }
 
         // Без идентификации нельзя переводить людям, без полной — за рубеж
-        String unavailable = user.getIdentificationLevel().unavailableReason(cmd.operationType(), cmd.providerGroup());
+        String unavailable = user.getIdentificationLevel().unavailableReason(cmd.operationType(), cmd.providerGroup(),
+                account.getType() == AccountType.WALLET);
         if (unavailable != null) {
             throw new ReservationException(IDENTIFICATION_REQUIRED, unavailable);
         }
@@ -98,7 +108,11 @@ public class ReservationService {
         if (cmd.recipientAccountId() != null) {
             checkRecipient(account, cmd.recipientAccountId(), cmd.amount(), cmd.operationType());
         }
+        checkMinAmount(cmd);
         checkLimits(cmd);
+        if (ABROAD.equals(cmd.operationType())) {
+            checkAbroadLimits(account, cmd);
+        }
         checkAccountLimits(account, cmd.amount().add(cmd.commission()));
 
         Reservation reservation = new Reservation(cmd.paymentId(), cmd.userId(), cmd.accountId(),
@@ -174,6 +188,15 @@ public class ReservationService {
         if (recipient.isExternal() && !ownTransfer) {
             throw new ReservationException(RECIPIENT_INVALID, "Зачислить на карту другого банка отсюда нельзя");
         }
+        // Электронные деньги нельзя получить в кредит: с кредитной карты кошелёк не пополняем
+        if (recipient.getType() == AccountType.WALLET && source.isCredit()) {
+            throw new ReservationException(RECIPIENT_INVALID, "Пополнить кошелёк с кредитной карты нельзя");
+        }
+        if (walletTransfer && !recipient.getUserId().equals(source.getUserId())
+                && users.findById(recipient.getUserId()).map(u -> !u.getIdentificationLevel().receivesFromOthers()).orElse(false)) {
+            throw new ReservationException(RECIPIENT_INVALID,
+                    "Кошелёк получателя не принимает переводы: получатель не прошёл идентификацию");
+        }
         if (walletTransfer && recipient.getType() != AccountType.WALLET) {
             throw new ReservationException(RECIPIENT_INVALID, "Перевод на кошелёк зачисляется только на «Мой кошелёк»");
         }
@@ -232,6 +255,34 @@ public class ReservationService {
         Stream.of(ids).filter(Objects::nonNull).distinct().sorted(Comparator.naturalOrder())
                 .forEach(id -> locked.put(id, accounts.findByIdForUpdate(id).orElseThrow()));
         return locked;
+    }
+
+    private void checkMinAmount(ReserveCommand cmd) {
+        if (MIN_10.contains(cmd.operationType()) && cmd.amount().compareTo(MIN_TRANSFER) < 0) {
+            throw new ReservationException(LIMIT_EXCEEDED, "Минимальная сумма перевода — " + rub(MIN_TRANSFER));
+        }
+    }
+
+    // За рубеж: с кошелька (без открытия счёта) — 300 000 ₽ за раз и 400 000 ₽ в месяц, с карты (со счёта) —
+    // 400 000 ₽ и 3 000 000 ₽. Лимиты кошелька по уровню идентификации проверяются отдельно
+    private void checkAbroadLimits(Account account, ReserveCommand cmd) {
+        boolean wallet = account.getType() == AccountType.WALLET;
+        BigDecimal single = wallet ? ABROAD_WALLET_SINGLE : ABROAD_CARD_SINGLE;
+        BigDecimal month = wallet ? ABROAD_WALLET_MONTH : ABROAD_CARD_MONTH;
+        if (cmd.amount().compareTo(single) > 0) {
+            throw new ReservationException(LIMIT_EXCEEDED, "Превышен лимит перевода за рубеж на одну операцию: " + rub(single));
+        }
+        OffsetDateTime from = startOf(LocalDate.now(clock).withDayOfMonth(1));
+        BigDecimal walletUsed = accounts.findByUserIdOrderByTypeDescCreatedAt(cmd.userId()).stream()
+                .filter(a -> a.getType() == AccountType.WALLET)
+                .map(a -> reservations.accountUsedSince(a.getId(), ABROAD, from))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal used = wallet ? walletUsed : reservations.usedSince(cmd.userId(), ABROAD, from).subtract(walletUsed);
+        if (used.add(cmd.amount()).compareTo(month) > 0) {
+            throw new ReservationException(LIMIT_EXCEEDED, "Превышен месячный лимит переводов за рубеж"
+                    + (wallet ? " с кошелька: " : " с карт: ") + rub(month) + ", доступно ещё "
+                    + rub(month.subtract(used).max(BigDecimal.ZERO)));
+        }
     }
 
     private void checkLimits(ReserveCommand cmd) {

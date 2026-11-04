@@ -32,22 +32,33 @@ public enum IdentificationLevel {
     public BigDecimal walletMaxMonthlyTurnover() { return walletMaxMonthlyTurnover; }
 
     // Почему операция недоступна на этом уровне; null — доступна.
-    // providerGroup — группа поставщика для оплаты через biller (BILL)
-    public String unavailableReason(String operationType, String providerGroup) {
-        boolean abroad = "ABROAD".equals(operationType)
-                || "BILL".equals(operationType) && "FOREIGN_MOBILE".equals(providerGroup);
-        if (abroad && this != FULL) {
-            return "Переводы и платежи за рубеж доступны только с полной идентификацией";
+    // providerGroup — группа поставщика для оплаты через biller (BILL); fromWallet — списание с «Моего кошелька».
+    // Правила — из «Памятки об электронных денежных средствах» и «Переводов за рубеж».
+    public String unavailableReason(String operationType, String providerGroup, boolean fromWallet) {
+        boolean bill = "BILL".equals(operationType);
+        boolean abroad = "ABROAD".equals(operationType) || bill && "FOREIGN_MOBILE".equals(providerGroup);
+        boolean toEmoney = "WALLET_TRANSFER".equals(operationType) || bill && "EMONEY".equals(providerGroup);
+        if (this == ANONYMOUS) {
+            // Без идентификации платить можно только юрлицам и ИП в России
+            if (PERSON_TRANSFERS.contains(operationType)) {
+                return "Переводы другим людям недоступны без идентификации. Пройдите упрощённую идентификацию";
+            }
+            if (abroad) {
+                return "Переводы и платежи за рубеж недоступны без идентификации";
+            }
+            if (toEmoney) {
+                return "Пополнение чужих электронных кошельков недоступно без идентификации";
+            }
         }
-        if (this != ANONYMOUS) {
-            return null;
-        }
-        if (PERSON_TRANSFERS.contains(operationType)) {
-            return "Переводы другим людям недоступны без идентификации. Пройдите упрощённую идентификацию";
-        }
-        if ("BILL".equals(operationType) && "EMONEY".equals(providerGroup)) {
-            return "Пополнение чужих электронных кошельков недоступно без идентификации";
+        // Перевод электронных денег без банковского счёта (на другой кошелёк) — только с полной идентификацией
+        if (this == SIMPLIFIED && fromWallet && toEmoney) {
+            return "Переводы с кошелька на другие электронные кошельки доступны только с полной идентификацией";
         }
         return null;
+    }
+
+    // Без идентификации кошелёк не принимает переводы от других людей — только со своих счетов и от юрлиц
+    public boolean receivesFromOthers() {
+        return this != ANONYMOUS;
     }
 }

@@ -23,6 +23,15 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
             """)
     BigDecimal usedSince(UUID userId, String operationType, OffsetDateTime from);
 
+    // Сколько списано с этого счёта операциями этого вида с начала периода
+    @Query("""
+            select coalesce(sum(r.amount), 0) from Reservation r
+            where r.accountId = :accountId and r.operationType = :operationType
+              and r.status <> com.paymentsapp.account.reservation.ReservationStatus.RELEASED
+              and r.createdAt >= :from
+            """)
+    BigDecimal accountUsedSince(UUID accountId, String operationType, OffsetDateTime from);
+
     // Оборот счёта: сколько списано и зарезервировано с него с начала периода
     @Query("""
             select coalesce(sum(r.total), 0) from Reservation r
