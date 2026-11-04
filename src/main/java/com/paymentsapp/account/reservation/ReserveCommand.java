@@ -11,6 +11,8 @@ public record ReserveCommand(
         String operationType,
         BigDecimal amount,
         BigDecimal commission,
-        String currency
+        String currency,
+        // Группа поставщика для BILL: от неё зависит, доступна ли оплата на уровне идентификации
+        String providerGroup
 ) {
 }

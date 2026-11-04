@@ -32,7 +32,8 @@ public class ReservationController {
     @PostMapping
     public ReservationResponse reserve(@Valid @RequestBody ReserveRequest req) {
         return ReservationResponse.of(service.reserve(new ReserveCommand(req.paymentId(), req.userId(),
-                req.accountId(), req.recipientAccountId(), req.operationType(), req.amount(), req.commission(), req.currency())));
+                req.accountId(), req.recipientAccountId(), req.operationType(), req.amount(), req.commission(), req.currency(),
+                req.providerGroup())));
     }
 
     @PostMapping("/{paymentId}/release")
@@ -53,7 +54,8 @@ public class ReservationController {
             @NotBlank String operationType,
             @NotNull @Positive @Digits(integer = 15, fraction = 2) BigDecimal amount,
             @NotNull @PositiveOrZero @Digits(integer = 15, fraction = 2) BigDecimal commission,
-            @NotBlank String currency
+            @NotBlank String currency,
+            String providerGroup
     ) {
     }
 

@@ -26,7 +26,8 @@ public class User {
 
     private String sbpDefaultBankId;
     private UUID defaultPaymentAccountId;
-    private String identificationLevel;
+    @Enumerated(EnumType.STRING)
+    private IdentificationLevel identificationLevel;
 
     private OffsetDateTime createdAt;
 
@@ -72,7 +73,7 @@ public class User {
     public Subscription getSubscription() { return subscription; }
     public String getSbpDefaultBankId() { return sbpDefaultBankId; }
     public UUID getDefaultPaymentAccountId() { return defaultPaymentAccountId; }
-    public String getIdentificationLevel() { return identificationLevel; }
+    public IdentificationLevel getIdentificationLevel() { return identificationLevel; }
 
     public void setDefaultPaymentAccount(UUID accountId) {
         this.defaultPaymentAccountId = accountId;

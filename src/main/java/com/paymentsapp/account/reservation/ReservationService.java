@@ -7,6 +7,7 @@ import com.paymentsapp.account.user.Account;
 import com.paymentsapp.account.user.AccountRepository;
 import com.paymentsapp.account.user.AccountStatus;
 import com.paymentsapp.account.user.AccountType;
+import com.paymentsapp.account.user.User;
 import com.paymentsapp.account.user.UserRepository;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
@@ -63,7 +64,7 @@ public class ReservationService {
     @Transactional
     public Reservation reserve(ReserveCommand cmd) {
         // Сначала блокируем пользователя: дальше все проверки идут без гонок
-        users.findByIdForUpdate(cmd.userId())
+        User user = users.findByIdForUpdate(cmd.userId())
                 .orElseThrow(() -> new ReservationException(ACCOUNT_NOT_FOUND, "Пользователь не найден"));
 
         var existing = reservations.findByPaymentId(cmd.paymentId());
@@ -86,6 +87,12 @@ public class ReservationService {
         }
         if (!account.getCurrency().equals(cmd.currency())) {
             throw new ReservationException(CURRENCY_MISMATCH, "Валюта счёта не совпадает с валютой платежа");
+        }
+
+        // Без идентификации нельзя переводить людям, без полной — за рубеж
+        String unavailable = user.getIdentificationLevel().unavailableReason(cmd.operationType(), cmd.providerGroup());
+        if (unavailable != null) {
+            throw new ReservationException(IDENTIFICATION_REQUIRED, unavailable);
         }
 
         if (cmd.recipientAccountId() != null) {
@@ -183,7 +190,8 @@ public class ReservationService {
             throw new ReservationException(CURRENCY_MISMATCH, "Валюта карты получателя другая");
         }
         // Максимальный остаток проверяем при резерве: после списания отказать в зачислении уже нельзя
-        BigDecimal maxBalance = accountLimits.findById(recipientAccountId).map(AccountLimits::getMaxBalance).orElse(null);
+        AccountLimits recipientLimits = limitsOf(recipient);
+        BigDecimal maxBalance = recipientLimits == null ? null : recipientLimits.getMaxBalance();
         if (maxBalance != null && recipient.getBalance().add(amount).compareTo(maxBalance) > 0) {
             throw new ReservationException(RECIPIENT_LIMIT_EXCEEDED,
                     "Превышен максимальный остаток на счёте получателя: " + rub(maxBalance));
@@ -192,7 +200,7 @@ public class ReservationService {
 
     // Лимиты счёта списания: сумма платежа и оборот за календарный месяц (вместе с комиссией)
     private void checkAccountLimits(Account account, BigDecimal total) {
-        AccountLimits l = accountLimits.findById(account.getId()).orElse(null);
+        AccountLimits l = limitsOf(account);
         if (l == null) {
             return;
         }
@@ -208,6 +216,15 @@ public class ReservationService {
                         + rub(l.getMaxMonthlyTurnover().subtract(used).max(BigDecimal.ZERO)));
             }
         }
+    }
+
+    // Лимиты «Моего кошелька» — по уровню идентификации владельца, остальных счетов — из account_limits
+    private AccountLimits limitsOf(Account account) {
+        if (account.getType() == AccountType.WALLET) {
+            return users.findById(account.getUserId())
+                    .map(u -> AccountLimits.forWallet(account.getId(), u.getIdentificationLevel())).orElse(null);
+        }
+        return accountLimits.findById(account.getId()).orElse(null);
     }
 
     private Map<UUID, Account> lockInOrder(UUID... ids) {

@@ -36,9 +36,12 @@ public class UserController {
     private final AccountLimitsRepository limits;
     private final CardLinkingService cards;
     private final com.paymentsapp.account.reservation.LimitRuleRepository operationLimits;
+    private final com.paymentsapp.account.reservation.ReservationRepository reservations;
 
     public UserController(UserRepository users, AccountRepository accounts, AccountLimitsRepository limits,
-                          CardLinkingService cards, com.paymentsapp.account.reservation.LimitRuleRepository operationLimits) {
+                          CardLinkingService cards, com.paymentsapp.account.reservation.LimitRuleRepository operationLimits,
+                          com.paymentsapp.account.reservation.ReservationRepository reservations) {
+        this.reservations = reservations;
         this.users = users;
         this.accounts = accounts;
         this.limits = limits;
@@ -126,6 +129,21 @@ public class UserController {
     public record OperationLimit(String operationType, String period, java.math.BigDecimal maxAmount) {
     }
 
+    // Сколько пользователь потратил на операции этого вида с начала месяца (по Москве) — pricing
+    // считает по этому бесплатный остаток переводов по СБП
+    @GetMapping("/{userId}/operation-usage")
+    public OperationUsage operationUsage(@PathVariable UUID userId, @org.springframework.web.bind.annotation.RequestParam String operationType) {
+        if (!users.existsById(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден");
+        }
+        java.time.ZoneId moscow = java.time.ZoneId.of("Europe/Moscow");
+        java.time.OffsetDateTime monthStart = java.time.LocalDate.now(moscow).withDayOfMonth(1).atStartOfDay(moscow).toOffsetDateTime();
+        return new OperationUsage(operationType, reservations.usedSince(userId, operationType, monthStart));
+    }
+
+    public record OperationUsage(String operationType, java.math.BigDecimal month) {
+    }
+
     // Отвязать карту другого банка
     @DeleteMapping("/{userId}/linked-cards/{accountId}")
     public List<AccountResponse> unlinkCard(@PathVariable UUID userId, @PathVariable UUID accountId) {
@@ -146,14 +164,18 @@ public class UserController {
             .thenComparing(Account::getCreatedAt);
 
     private List<AccountResponse> accountsOf(UUID userId) {
-        UUID paymentDefault = users.findById(userId).map(User::getDefaultPaymentAccountId).orElse(null);
+        User user = users.findById(userId).orElseThrow();
+        UUID paymentDefault = user.getDefaultPaymentAccountId();
         // Закрытые (отвязанные) карты не показываем
         List<Account> list = accounts.findByUserIdOrderByTypeDescCreatedAt(userId).stream()
                 .filter(a -> a.getStatus() != AccountStatus.CLOSED).sorted(ORDER).toList();
         Map<java.util.UUID, AccountLimits> byAccount = limits.findAllById(list.stream().map(Account::getId).toList())
                 .stream().collect(Collectors.toMap(AccountLimits::getAccountId, Function.identity()));
         return list.stream()
-                .map(a -> AccountResponse.of(a, byAccount.get(a.getId()), a.getId().equals(paymentDefault)))
+                // Лимиты кошелька задаёт уровень идентификации
+                .map(a -> AccountResponse.of(a, a.getType() == AccountType.WALLET
+                        ? AccountLimits.forWallet(a.getId(), user.getIdentificationLevel()) : byAccount.get(a.getId()),
+                        a.getId().equals(paymentDefault)))
                 .toList();
     }
 

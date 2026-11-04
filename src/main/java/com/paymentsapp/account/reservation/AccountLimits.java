@@ -28,6 +28,11 @@ public class AccountLimits {
         this.maxMonthlyTurnover = maxMonthlyTurnover;
     }
 
+    // Лимиты «Моего кошелька» задаёт уровень идентификации владельца
+    public static AccountLimits forWallet(UUID accountId, com.paymentsapp.account.user.IdentificationLevel level) {
+        return new AccountLimits(accountId, level.walletMaxPayment(), level.walletMaxBalance(), level.walletMaxMonthlyTurnover());
+    }
+
     public UUID getAccountId() { return accountId; }
     public BigDecimal getMaxPayment() { return maxPayment; }
     public BigDecimal getMaxBalance() { return maxBalance; }

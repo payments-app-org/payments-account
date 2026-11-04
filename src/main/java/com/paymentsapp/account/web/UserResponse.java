@@ -33,7 +33,7 @@ public record UserResponse(
 
     static UserResponse of(User u, List<AccountResponse> accounts) {
         return new UserResponse(u.getId(), u.getFirstName(), u.getLastName(), u.getMiddleName(), u.displayName(),
-                u.getPhone(), u.getEmail(), u.getSubscription(), u.getSbpDefaultBankId(), u.getDefaultPaymentAccountId(), u.getIdentificationLevel(), accounts,
+                u.getPhone(), u.getEmail(), u.getSubscription(), u.getSbpDefaultBankId(), u.getDefaultPaymentAccountId(), u.getIdentificationLevel().name(), accounts,
                 Roundup.of(u));
     }
 }
