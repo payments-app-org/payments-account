@@ -2,7 +2,7 @@ package com.paymentsapp.account.reservation;
 
 import static com.paymentsapp.account.reservation.ReservationException.Code.*;
 
-import com.paymentsapp.account.outbox.Outbox;
+import com.paymentsapp.platform.outbox.Outbox;
 import com.paymentsapp.account.user.Account;
 import com.paymentsapp.account.user.AccountRepository;
 import com.paymentsapp.account.user.AccountStatus;
@@ -14,14 +14,13 @@ import java.text.NumberFormat;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReservationService {
 
-    public static final String TOPIC = "account.reservations";
     static final String OWN_TRANSFER = "OWN_TRANSFER";
     static final String WALLET_TRANSFER = "WALLET_TRANSFER";
     static final String ABROAD = "ABROAD";
@@ -42,8 +40,6 @@ public class ReservationService {
     private static final BigDecimal ABROAD_WALLET_MONTH = BigDecimal.valueOf(400_000);
     private static final BigDecimal ABROAD_CARD_SINGLE = BigDecimal.valueOf(400_000);
     private static final BigDecimal ABROAD_CARD_MONTH = BigDecimal.valueOf(3_000_000);
-    // Дневной и месячный лимиты считаем по московскому времени
-    private static final ZoneId LIMITS_ZONE = ZoneId.of("Europe/Moscow");
 
     private final UserRepository users;
     private final AccountRepository accounts;
@@ -51,16 +47,14 @@ public class ReservationService {
     private final LimitRuleRepository limits;
     private final AccountLimitsRepository accountLimits;
     private final Outbox outbox;
+    // Дневной и месячный лимиты считаем по часовому поясу бизнеса (platform.time.zone)
     private final Clock clock;
+    private final String topic;
 
-    @Autowired
     public ReservationService(UserRepository users, AccountRepository accounts, ReservationRepository reservations,
-                              LimitRuleRepository limits, AccountLimitsRepository accountLimits, Outbox outbox) {
-        this(users, accounts, reservations, limits, accountLimits, outbox, Clock.system(LIMITS_ZONE));
-    }
-
-    ReservationService(UserRepository users, AccountRepository accounts, ReservationRepository reservations,
-                       LimitRuleRepository limits, AccountLimitsRepository accountLimits, Outbox outbox, Clock clock) {
+                              LimitRuleRepository limits, AccountLimitsRepository accountLimits, Outbox outbox, Clock clock,
+                              @Value("${messaging.account-reservations.topic}") String topic) {
+        this.topic = topic;
         this.users = users;
         this.accounts = accounts;
         this.reservations = reservations;
@@ -315,11 +309,11 @@ public class ReservationService {
     }
 
     private OffsetDateTime startOf(LocalDate day) {
-        return day.atStartOfDay(LIMITS_ZONE).toOffsetDateTime();
+        return day.atStartOfDay(clock.getZone()).toOffsetDateTime();
     }
 
     private void publish(String eventType, Reservation r) {
-        outbox.add(TOPIC, r.getPaymentId().toString(), eventType, Map.of(
+        outbox.add(topic, r.getPaymentId().toString(), eventType, Map.of(
                 "reservationId", r.getId(),
                 "paymentId", r.getPaymentId(),
                 "userId", r.getUserId(),

@@ -20,6 +20,14 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:29092}
     producer:
       acks: all
+  # Redis: блокировки планировщиков (ShedLock), кэш
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # Redis — только для кэша и блокировок, репозитории Spring Data на нём не нужны
+      repositories:
+        enabled: false
   jpa:
     open-in-view: false
     hibernate:
@@ -27,5 +35,17 @@ spring:
     properties:
       hibernate.default_schema: account
 
-outbox:
-  publish-interval: 1s
+# Общая библиотека libs/platform
+platform:
+  time:
+    zone: Europe/Moscow
+  outbox:
+    enabled: true
+    publish-interval: 1s
+    retention: 7d
+
+messaging:
+  account-reservations:
+    topic: account.reservations
+    partitions: 3
+    replicas: 1
