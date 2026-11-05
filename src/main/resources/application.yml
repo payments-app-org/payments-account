@@ -25,6 +25,9 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # Redis недоступен — отказ за секунды (кэш идёт мимо, readiness — DOWN), а не ожидание по минуте
+      connect-timeout: 1s
+      timeout: 2s
       # Redis — только для кэша и блокировок, репозитории Spring Data на нём не нужны
       repositories:
         enabled: false
@@ -44,6 +47,10 @@ spring:
 
 # Общая библиотека libs/platform
 platform:
+  # Swagger: описание API и коды ошибок в схеме Problem
+  openapi:
+    description: "Пользователи, счета и балансы, резервы, лимиты, привязанные карты"
+    error-codes: com.paymentsapp.account.error.AccountError
   time:
     zone: Europe/Moscow
   outbox:
@@ -67,3 +74,35 @@ account:
   roundup:
     # Шаги «Округления на пользу», ₽ (совпадают с ограничением users_roundup_step_check)
     steps: [10, 100, 1000]
+
+# Actuator: /actuator/health — liveness (процесс жив) и readiness (готов принимать запросы: есть БД и Redis);
+# по ним healthcheck в compose и пробы Kubernetes. Остановка — плавная (по умолчанию в Spring Boot): новые запросы
+# не принимаем, текущие дорабатывают
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,redis
+
+# Swagger UI: публичный API и внутренний — для других сервисов (резервы, получатель по карте)
+springdoc:
+  # Swagger UI и спецификация включены; в проде можно выключить: SWAGGER_ENABLED=false
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+  group-configs:
+    - group: public
+      display-name: Публичный API
+      paths-to-match: /api/**
+      paths-to-exclude: /api/internal/**
+    - group: internal
+      display-name: Для сервисов
+      paths-to-match: /api/internal/**
