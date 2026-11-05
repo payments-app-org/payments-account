@@ -17,6 +17,8 @@ import com.paymentsapp.platform.error.DomainException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -75,11 +77,17 @@ public class CardLinkingService {
         if (cvc == null || !CVC.matcher(cvc).matches()) {
             throw new DomainException(CARD_CVC_INVALID);
         }
+        List<String> fingerprints = protector.fingerprints(pan);
         String fingerprint = protector.fingerprint(pan);
-        if (accounts.findByCardNumberHashAndType(fingerprint, AccountType.CARD).isPresent()) {
+        if (accounts.findFirstByCardNumberHashInAndType(fingerprints, AccountType.CARD).isPresent()) {
             throw new DomainException(CARD_IS_OURS);
         }
-        if (accounts.existsByUserIdAndCardFingerprintAndStatusNot(userId, fingerprint, AccountStatus.CLOSED)) {
+        Optional<Account> linked = accounts.findFirstByUserIdAndCardFingerprintInAndStatusNot(userId, fingerprints,
+                AccountStatus.CLOSED);
+        if (linked.isPresent()) {
+            // Отпечаток на старом ключе — заодно переводим на текущий
+            linked.filter(a -> !protector.currentKeyId().equals(a.getFingerprintKeyId()))
+                    .ifPresent(a -> a.rekeyFingerprint(fingerprint, protector.currentKeyId()));
             throw new DomainException(CARD_ALREADY_LINKED);
         }
         if (accounts.countByUserIdAndTypeAndStatusNot(userId, AccountType.EXTERNAL_CARD, AccountStatus.CLOSED)
@@ -87,7 +95,7 @@ public class CardLinkingService {
             throw new DomainException(LINKED_CARDS_LIMIT, properties.maxLinked());
         }
         Account card = accounts.save(Account.linkedCard(userId, pan.substring(pan.length() - LAST_DIGITS),
-                CardNumbers.paymentSystem(pan), expiry.trim(), fingerprint, OffsetDateTime.now(clock)));
+                CardNumbers.paymentSystem(pan), expiry.trim(), fingerprint, protector.currentKeyId(), OffsetDateTime.now(clock)));
         limitDefaults.findById(AccountType.EXTERNAL_CARD)
                 .ifPresent(defaults -> limits.save(AccountLimits.fromDefaults(card.getId(), defaults)));
         return card;

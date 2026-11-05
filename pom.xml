@@ -24,16 +24,11 @@
     </properties>
 
     <dependencies>
-        <!-- Общая инфраструктура: outbox, доменные ошибки, DLT, часовой пояс, хэши, блокировки планировщиков -->
+        <!-- Общая инфраструктура: доменные ошибки, часовой пояс, хэши, Swagger-схема ошибок -->
         <dependency>
             <groupId>com.paymentsapp</groupId>
             <artifactId>platform</artifactId>
             <version>${platform.version}</version>
-        </dependency>
-        <!-- Redis: блокировки планировщиков (ShedLock), кэш -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -60,20 +55,7 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-kafka</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-liquibase</artifactId>
-        </dependency>
-        <!-- Кэш Hibernate второго уровня для справочников лимитов: JCache с Caffeine -->
-        <dependency>
-            <groupId>org.hibernate.orm</groupId>
-            <artifactId>hibernate-jcache</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.github.ben-manes.caffeine</groupId>
-            <artifactId>jcache</artifactId>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>

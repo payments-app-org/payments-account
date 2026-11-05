@@ -1,19 +1,14 @@
 package com.paymentsapp.account.limits;
 
-import jakarta.persistence.Cacheable;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.util.UUID;
-import org.hibernate.annotations.Cache;
-import org.hibernate.annotations.CacheConcurrencyStrategy;
 
 // Лимиты конкретного счёта (карты); у «Моего кошелька» лимиты задаёт уровень идентификации владельца
 @Entity
 @Table(name = "account_limits")
-@Cacheable
-@Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
 public class AccountLimits {
 
     @Id

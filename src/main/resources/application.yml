@@ -16,34 +16,12 @@ spring:
     change-log: classpath:db/changelog/db.changelog-master.yaml
     default-schema: account
     liquibase-schema: account
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:29092}
-    producer:
-      acks: all
-  # Redis: блокировки планировщиков (ShedLock), кэш
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      # Redis недоступен — отказ за секунды (кэш идёт мимо, readiness — DOWN), а не ожидание по минуте
-      connect-timeout: 1s
-      timeout: 2s
-      # Redis — только для кэша и блокировок, репозитории Spring Data на нём не нужны
-      repositories:
-        enabled: false
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: validate
     properties:
       hibernate.default_schema: account
-      # Кэш второго уровня: справочники лимитов (identification_limits, operation_limits, …) и лимиты счетов.
-      # Балансы, счета и резервы не кэшируем.
-      hibernate.cache.use_second_level_cache: true
-      hibernate.cache.use_query_cache: true
-      hibernate.cache.region.factory_class: jcache
-      hibernate.javax.cache.provider: com.github.benmanes.caffeine.jcache.spi.CaffeineCachingProvider
-      hibernate.javax.cache.missing_cache_strategy: create
 
 # Общая библиотека libs/platform
 platform:
@@ -53,29 +31,24 @@ platform:
     error-codes: com.paymentsapp.account.error.AccountError
   time:
     zone: Europe/Moscow
-  outbox:
-    enabled: true
-    publish-interval: 1s
-    retention: 7d
-
-messaging:
-  account-reservations:
-    topic: account.reservations
-    partitions: 3
-    replicas: 1
 
 account:
   card:
-    # Ключи только из окружения (в compose — из .env); без них сервис не стартует
-    hmac-key: ${CARD_HMAC_KEY}
-    encryption-key: ${CARD_ENCRYPTION_KEY}
+    # Ключи только из окружения (в compose — из .env); без них сервис не стартует.
+    # Ротация: добавить ключ v2 (ACCOUNT_CARD_KEYS_V2_HMAC, ACCOUNT_CARD_KEYS_V2_ENCRYPTION) и CARD_CURRENT_KEY=v2 —
+    # при старте наши карты перешифруются на v2; v1 удалить, когда в логе нет записей на старом ключе
+    current-key: ${CARD_CURRENT_KEY:v1}
+    keys:
+      v1:
+        hmac: ${CARD_HMAC_KEY}
+        encryption: ${CARD_ENCRYPTION_KEY}
     # Сколько карт других банков можно привязать
     max-linked: 5
   roundup:
     # Шаги «Округления на пользу», ₽ (совпадают с ограничением users_roundup_step_check)
     steps: [10, 100, 1000]
 
-# Actuator: /actuator/health — liveness (процесс жив) и readiness (готов принимать запросы: есть БД и Redis);
+# Actuator: /actuator/health — liveness (процесс жив) и readiness (готов принимать запросы: есть БД);
 # по ним healthcheck в compose и пробы Kubernetes. Остановка — плавная (по умолчанию в Spring Boot): новые запросы
 # не принимаем, текущие дорабатывают
 management:
@@ -89,7 +62,7 @@ management:
         enabled: true
       group:
         readiness:
-          include: readinessState,db,redis
+          include: readinessState,db
 
 # Swagger UI: публичный API и внутренний — для других сервисов (резервы, получатель по карте)
 springdoc:

@@ -6,6 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
@@ -13,7 +16,8 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Component;
 
 // Номер карты в базе: HMAC-SHA256 с секретным ключом (по нему ищем; без ключа номер не подобрать перебором по BIN
-// и алгоритму Луна) и шифротекст AES-256-GCM (iv || ciphertext+tag в base64).
+// и алгоритму Луна) и шифротекст AES-256-GCM (iv || ciphertext+tag в base64). У каждой записи — id ключа:
+// ключи можно менять, не теряя доступа к старым записям. Новые записи — текущим ключом, поиск — по всем.
 @Component
 public class CardNumberProtector {
 
@@ -23,24 +27,44 @@ public class CardNumberProtector {
     private static final int TAG_BITS = 128;
     private static final int KEY_BYTES = 32;
 
-    private final byte[] hmacKey;
-    private final SecretKey encryptionKey;
+    private final String current;
+    private final Map<String, byte[]> hmacKeys = new LinkedHashMap<>();
+    private final Map<String, SecretKey> encryptionKeys = new LinkedHashMap<>();
     private final SecureRandom random = new SecureRandom();
 
     public CardNumberProtector(CardProperties properties) {
-        if (properties.hmacKey() == null || properties.hmacKey().isBlank()) {
-            throw new IllegalStateException("Не задан account.card.hmac-key (CARD_HMAC_KEY)");
+        if (properties.keys() == null || properties.keys().isEmpty()) {
+            throw new IllegalStateException("Не заданы ключи account.card.keys (CARD_HMAC_KEY, CARD_ENCRYPTION_KEY)");
         }
-        byte[] key = properties.encryptionKey() == null ? new byte[0] : Base64.getDecoder().decode(properties.encryptionKey());
-        if (key.length != KEY_BYTES) {
-            throw new IllegalStateException("account.card.encryption-key (CARD_ENCRYPTION_KEY) — 32 байта в base64");
+        properties.keys().forEach((id, key) -> {
+            if (key.hmac() == null || key.hmac().isBlank()) {
+                throw new IllegalStateException("Не задан HMAC-ключ карт " + id);
+            }
+            byte[] aes = key.encryption() == null ? new byte[0] : Base64.getDecoder().decode(key.encryption());
+            if (aes.length != KEY_BYTES) {
+                throw new IllegalStateException("Ключ шифрования карт " + id + " — 32 байта в base64");
+            }
+            hmacKeys.put(id, key.hmac().getBytes(StandardCharsets.UTF_8));
+            encryptionKeys.put(id, new SecretKeySpec(aes, AES));
+        });
+        if (!hmacKeys.containsKey(properties.currentKey())) {
+            throw new IllegalStateException("Текущий ключ карт " + properties.currentKey() + " не задан в account.card.keys");
         }
-        this.hmacKey = properties.hmacKey().getBytes(StandardCharsets.UTF_8);
-        this.encryptionKey = new SecretKeySpec(key, AES);
+        this.current = properties.currentKey();
     }
 
+    public String currentKeyId() {
+        return current;
+    }
+
+    // Отпечаток текущим ключом — для новых записей
     public String fingerprint(String cardNumber) {
-        return Hashing.hmacSha256Hex(hmacKey, cardNumber);
+        return Hashing.hmacSha256Hex(hmacKeys.get(current), cardNumber);
+    }
+
+    // Отпечатки всеми ключами — для поиска: запись могла быть сделана старым ключом
+    public List<String> fingerprints(String cardNumber) {
+        return hmacKeys.values().stream().map(key -> Hashing.hmacSha256Hex(key, cardNumber)).toList();
     }
 
     public String encrypt(String cardNumber) {
@@ -48,7 +72,7 @@ public class CardNumberProtector {
             byte[] iv = new byte[IV_BYTES];
             random.nextBytes(iv);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.ENCRYPT_MODE, encryptionKey, new GCMParameterSpec(TAG_BITS, iv));
+            cipher.init(Cipher.ENCRYPT_MODE, encryptionKeys.get(current), new GCMParameterSpec(TAG_BITS, iv));
             byte[] encrypted = cipher.doFinal(cardNumber.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(ByteBuffer.allocate(iv.length + encrypted.length).put(iv).put(encrypted).array());
         } catch (GeneralSecurityException e) {
@@ -56,7 +80,12 @@ public class CardNumberProtector {
         }
     }
 
-    public String decrypt(String stored) {
+    // Нужен при ротации: номер нашей карты расшифровываем старым ключом и защищаем новым
+    public String decrypt(String keyId, String stored) {
+        SecretKey key = encryptionKeys.get(keyId);
+        if (key == null) {
+            throw new IllegalStateException("Ключ карт " + keyId + " удалён, а записи на нём остались");
+        }
         try {
             ByteBuffer data = ByteBuffer.wrap(Base64.getDecoder().decode(stored));
             byte[] iv = new byte[IV_BYTES];
@@ -64,7 +93,7 @@ public class CardNumberProtector {
             byte[] encrypted = new byte[data.remaining()];
             data.get(encrypted);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.DECRYPT_MODE, encryptionKey, new GCMParameterSpec(TAG_BITS, iv));
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
             return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);

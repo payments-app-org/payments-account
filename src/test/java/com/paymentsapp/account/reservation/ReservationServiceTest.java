@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.paymentsapp.account.error.AccountError;
+import com.paymentsapp.account.journal.Journal;
 import com.paymentsapp.account.limits.Limits;
 import com.paymentsapp.account.limits.LimitsService;
 import com.paymentsapp.account.limits.OperationType;
@@ -26,10 +27,10 @@ import com.paymentsapp.account.user.IdentificationLevel;
 import com.paymentsapp.account.user.User;
 import com.paymentsapp.account.user.UserRepository;
 import com.paymentsapp.platform.error.DomainException;
-import com.paymentsapp.platform.outbox.Outbox;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
@@ -40,18 +41,16 @@ import org.mockito.ArgumentCaptor;
 
 class ReservationServiceTest {
 
-    private static final String TOPIC = "account.reservations";
-
     private final UserRepository users = mock(UserRepository.class);
     private final AccountRepository accounts = mock(AccountRepository.class);
     private final ReservationRepository reservations = mock(ReservationRepository.class);
     private final ReservationCheck check = mock(ReservationCheck.class);
     private final LimitsService limits = mock(LimitsService.class);
     private final UsageCounters usage = mock(UsageCounters.class);
-    private final Outbox outbox = mock(Outbox.class);
+    private final Journal journal = mock(Journal.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-05T09:00:00Z"), ZoneId.of("Europe/Moscow"));
     private final ReservationService service = new ReservationService(users, accounts, reservations, List.of(check), limits,
-            usage, outbox, clock, TOPIC);
+            usage, journal, clock);
 
     private final User user = TestData.user(UUID.randomUUID(), IdentificationLevel.FULL);
     private final Account card = TestData.account(user.getId(), AccountType.CARD, "10000");
@@ -69,7 +68,7 @@ class ReservationServiceTest {
     }
 
     @Test
-    void reserveHoldsFundsCountsLimitsAndPublishes() {
+    void reserveHoldsFundsAndCountsLimitsWithoutMovingMoney() {
         ReserveCommand cmd = command("1000");
 
         Reservation r = service.reserve(cmd);
@@ -80,7 +79,8 @@ class ReservationServiceTest {
         verify(usage).add(counted.capture());
         assertThat(counted.getValue().amount()).isEqualByComparingTo("1000");
         assertThat(counted.getValue().total()).isEqualByComparingTo("1050");
-        verify(outbox).add(eq(TOPIC), eq(cmd.paymentId().toString()), eq("FundsReserved"), anyMap());
+        // Резерв — не движение денег: в журнал попадёт только списание
+        verify(journal, never()).debit(any(), any(), any(), any());
     }
 
     @Test
@@ -90,7 +90,7 @@ class ReservationServiceTest {
         assertThatThrownBy(() -> service.reserve(command("1000"))).isInstanceOf(DomainException.class);
         assertThat(card.available()).isEqualByComparingTo("10000");
         verify(usage, never()).add(any());
-        verify(outbox, never()).add(anyString(), anyString(), anyString(), anyMap());
+
     }
 
     @Test
@@ -117,5 +117,40 @@ class ReservationServiceTest {
         assertThat(r.getStatus()).isEqualTo(ReservationStatus.RELEASED);
         verify(usage).subtract(any());
         assertThatThrownBy(() -> service.capture(cmd.paymentId())).hasMessage(AccountError.RESERVATION_RELEASED.template());
+    }
+
+    // Перевод внутри банка: проверки, списание и зачисление одной транзакцией, оба движения — в журнал
+    @Test
+    void transferMovesMoneyOnceAndJournalsBothSides() {
+        Account wallet = TestData.account(user.getId(), AccountType.WALLET, "0");
+        when(accounts.findByIdForUpdate(wallet.getId())).thenReturn(Optional.of(wallet));
+        ReserveCommand cmd = new ReserveCommand(UUID.randomUUID(), user.getId(), card.getId(), wallet.getId(),
+                OperationType.OWN_TRANSFER, new BigDecimal("1000"), BigDecimal.ZERO, TestData.RUB, null);
+
+        Reservation r = service.transfer(cmd);
+        when(reservations.findByPaymentId(cmd.paymentId())).thenReturn(Optional.of(r));
+        // Повтор после тайм-аута: тот же перевод, деньги второй раз не двигаются
+        service.transfer(cmd);
+
+        assertThat(r.getStatus()).isEqualTo(ReservationStatus.CAPTURED);
+        assertThat(card.getBalance()).isEqualByComparingTo("9000");
+        assertThat(card.getReserved()).isEqualByComparingTo("0");
+        assertThat(wallet.getBalance()).isEqualByComparingTo("1000");
+        verify(journal).debit(card, cmd.paymentId(), new BigDecimal("1000"), OffsetDateTime.now(clock));
+        verify(journal).credit(wallet, cmd.paymentId(), new BigDecimal("1000"), OffsetDateTime.now(clock));
+    }
+
+    @Test
+    void rejectedTransferMovesNothing() {
+        Account wallet = TestData.account(user.getId(), AccountType.WALLET, "0");
+        when(accounts.findByIdForUpdate(wallet.getId())).thenReturn(Optional.of(wallet));
+        doThrow(new DomainException(AccountError.RECIPIENT_MAX_BALANCE, "15 000 ₽")).when(check).check(any());
+        ReserveCommand cmd = new ReserveCommand(UUID.randomUUID(), user.getId(), card.getId(), wallet.getId(),
+                OperationType.OWN_TRANSFER, new BigDecimal("1000"), BigDecimal.ZERO, TestData.RUB, null);
+
+        assertThatThrownBy(() -> service.transfer(cmd)).isInstanceOf(DomainException.class);
+        assertThat(card.getBalance()).isEqualByComparingTo("10000");
+        assertThat(wallet.getBalance()).isEqualByComparingTo("0");
+        verify(journal, never()).debit(any(), any(), any(), any());
     }
 }

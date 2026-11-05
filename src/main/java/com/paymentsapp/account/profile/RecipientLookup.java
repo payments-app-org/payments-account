@@ -39,7 +39,7 @@ public class RecipientLookup {
 
     @Transactional(readOnly = true)
     public Recipient byCard(String cardNumber) {
-        Account card = accounts.findByCardNumberHashAndType(cards.fingerprint(cardNumber), AccountType.CARD)
+        Account card = accounts.findFirstByCardNumberHashInAndType(cards.fingerprints(cardNumber), AccountType.CARD)
                 .orElseThrow(() -> new DomainException(RECIPIENT_UNKNOWN));
         User user = users.findById(card.getUserId()).orElseThrow();
         return new Recipient(user.getId(), user.displayName(), card.getId(), user.getSbpDefaultBankId(), null);

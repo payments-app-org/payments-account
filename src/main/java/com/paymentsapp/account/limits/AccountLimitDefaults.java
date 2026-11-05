@@ -1,23 +1,18 @@
 package com.paymentsapp.account.limits;
 
 import com.paymentsapp.account.user.AccountType;
-import jakarta.persistence.Cacheable;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
-import org.hibernate.annotations.Cache;
-import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.annotations.Immutable;
 
 // Лимиты, которые получает новый счёт этого типа (привязанная карта другого банка)
 @Entity
 @Table(name = "account_limit_defaults")
 @Immutable
-@Cacheable
-@Cache(usage = CacheConcurrencyStrategy.READ_ONLY)
 public class AccountLimitDefaults {
 
     @Id

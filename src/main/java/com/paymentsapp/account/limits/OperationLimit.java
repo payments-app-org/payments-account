@@ -1,14 +1,11 @@
 package com.paymentsapp.account.limits;
 
-import jakarta.persistence.Cacheable;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
-import org.hibernate.annotations.Cache;
-import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.annotations.Immutable;
 
 // Лимит на вид операции: на одну операцию (с минимумом), за день или за месяц; для всех источников или
@@ -16,8 +13,6 @@ import org.hibernate.annotations.Immutable;
 @Entity
 @Table(name = "operation_limits")
 @Immutable
-@Cacheable
-@Cache(usage = CacheConcurrencyStrategy.READ_ONLY)
 public class OperationLimit {
 
     @Id

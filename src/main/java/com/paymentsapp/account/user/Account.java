@@ -30,18 +30,21 @@ public class Account {
     private BigDecimal balance;
     private BigDecimal reserved;
     private String currency;
-    // Номер нашей карты открыто больше не храним: после CardNumberMigration поле пустое
+    // Номер нашей карты открыто больше не храним: после CardKeyRotation поле пустое
     private String cardNumber;
-    // HMAC номера (поиск получателя по карте) и номер, зашифрованный AES-GCM
+    // HMAC номера (поиск получателя по карте) и номер, зашифрованный AES-GCM; cardKeyId — каким ключом
     private String cardNumberHash;
     private String cardNumberEncrypted;
+    private String cardKeyId;
     private String cardLast4;
     private String sbpBankId;
     private String paymentSystem;
     private boolean isDefault;
     private String cardExpiry;
     private String accountNumber;
+    // Карта другого банка: только отпечаток номера (сам номер не храним) и id ключа отпечатка
     private String cardFingerprint;
+    private String fingerprintKeyId;
     // Кредитная карта: с неё нельзя пополнять электронные кошельки (161-ФЗ, ст. 7 ч. 9)
     private boolean credit;
     private OffsetDateTime createdAt;
@@ -55,7 +58,7 @@ public class Account {
 
     // Привязка карты другого банка
     public static Account linkedCard(UUID userId, String last4, String paymentSystem, String expiry, String fingerprint,
-                                     OffsetDateTime now) {
+                                     String fingerprintKeyId, OffsetDateTime now) {
         Account a = new Account();
         a.id = UUID.randomUUID();
         a.userId = userId;
@@ -69,6 +72,7 @@ public class Account {
         a.paymentSystem = paymentSystem;
         a.cardExpiry = expiry;
         a.cardFingerprint = fingerprint;
+        a.fingerprintKeyId = fingerprintKeyId;
         a.createdAt = now;
         return a;
     }
@@ -90,10 +94,17 @@ public class Account {
     }
 
     // Номер карты: только отпечаток для поиска и шифротекст, открытый номер стираем
-    public void protectCardNumber(String hash, String encrypted) {
+    public void protectCardNumber(String hash, String encrypted, String keyId) {
         this.cardNumberHash = hash;
         this.cardNumberEncrypted = encrypted;
+        this.cardKeyId = keyId;
         this.cardNumber = null;
+    }
+
+    // Отпечаток карты другого банка — новым ключом (номер в руках: пользователь только что ввёл его)
+    public void rekeyFingerprint(String fingerprint, String keyId) {
+        this.cardFingerprint = fingerprint;
+        this.fingerprintKeyId = keyId;
     }
 
     public boolean isCredit() {
@@ -170,6 +181,9 @@ public class Account {
     public BigDecimal getReserved() { return reserved; }
     public String getCurrency() { return currency; }
     public String getCardNumber() { return cardNumber; }
+    public String getCardNumberEncrypted() { return cardNumberEncrypted; }
+    public String getCardKeyId() { return cardKeyId; }
+    public String getFingerprintKeyId() { return fingerprintKeyId; }
     public String getCardLast4() { return cardLast4; }
     public String getPaymentSystem() { return paymentSystem; }
     public boolean isDefault() { return isDefault; }

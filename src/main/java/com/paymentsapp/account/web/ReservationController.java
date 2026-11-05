@@ -1,10 +1,12 @@
 package com.paymentsapp.account.web;
 
+import com.paymentsapp.account.journal.CreditService;
 import com.paymentsapp.account.limits.OperationType;
 import com.paymentsapp.account.reservation.Reservation;
 import com.paymentsapp.account.reservation.ReservationService;
 import com.paymentsapp.account.reservation.ReservationStatus;
 import com.paymentsapp.account.reservation.ReserveCommand;
+import com.paymentsapp.account.user.Account;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
@@ -19,30 +21,43 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-// Внутренний API для сервиса payment: резерв → списание или снятие резерва
+// Внутренний API для сервиса payment: резерв → списание или снятие резерва; перевод внутри банка одной операцией;
+// зачисление входящего перевода
 @RestController
-@RequestMapping("/api/internal/reservations")
+@RequestMapping("/api/internal")
 public class ReservationController {
 
     private final ReservationService service;
+    private final CreditService credits;
 
-    public ReservationController(ReservationService service) {
+    public ReservationController(ReservationService service, CreditService credits) {
         this.service = service;
+        this.credits = credits;
     }
 
-    @PostMapping
+    @PostMapping("/reservations")
     public ReservationResponse reserve(@Valid @RequestBody ReserveRequest req) {
-        return ReservationResponse.of(service.reserve(new ReserveCommand(req.paymentId(), req.userId(),
-                req.accountId(), req.recipientAccountId(), req.operationType(), req.amount(), req.commission(), req.currency(),
-                req.providerGroup())));
+        return ReservationResponse.of(service.reserve(req.command()));
     }
 
-    @PostMapping("/{paymentId}/release")
+    // Между своими счетами и в кошелёк другого клиента: проверки, списание и зачисление одной транзакцией
+    @PostMapping("/transfers")
+    public ReservationResponse transfer(@Valid @RequestBody ReserveRequest req) {
+        return ReservationResponse.of(service.transfer(req.command()));
+    }
+
+    @PostMapping("/credits")
+    public CreditResponse credit(@Valid @RequestBody CreditRequest req) {
+        Account account = credits.credit(req.paymentId(), req.userId(), req.accountId(), req.amount(), req.currency());
+        return new CreditResponse(req.paymentId(), account.getId());
+    }
+
+    @PostMapping("/reservations/{paymentId}/release")
     public ReservationResponse release(@PathVariable UUID paymentId) {
         return ReservationResponse.of(service.release(paymentId));
     }
 
-    @PostMapping("/{paymentId}/capture")
+    @PostMapping("/reservations/{paymentId}/capture")
     public ReservationResponse capture(@PathVariable UUID paymentId) {
         return ReservationResponse.of(service.capture(paymentId));
     }
@@ -58,6 +73,23 @@ public class ReservationController {
             @NotBlank String currency,
             String providerGroup
     ) {
+
+        ReserveCommand command() {
+            return new ReserveCommand(paymentId, userId, accountId, recipientAccountId, operationType, amount, commission,
+                    currency, providerGroup);
+        }
+    }
+
+    public record CreditRequest(
+            @NotNull UUID paymentId,
+            @NotNull UUID userId,
+            @NotNull UUID accountId,
+            @NotNull @Positive @Digits(integer = 15, fraction = 2) BigDecimal amount,
+            @NotBlank String currency
+    ) {
+    }
+
+    public record CreditResponse(UUID paymentId, UUID accountId) {
     }
 
     public record ReservationResponse(UUID reservationId, UUID paymentId, ReservationStatus status, BigDecimal total) {

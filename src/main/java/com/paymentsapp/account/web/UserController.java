@@ -10,6 +10,11 @@ import com.paymentsapp.account.profile.RoundupProperties;
 import com.paymentsapp.account.profile.RoundupService;
 import com.paymentsapp.account.profile.SbpSourceService;
 import com.paymentsapp.account.user.Account;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -62,7 +67,7 @@ public class UserController {
     // Привязать карту другого банка
     @PostMapping("/{userId}/linked-cards")
     @ResponseStatus(HttpStatus.CREATED)
-    public AccountResponse linkCard(@PathVariable UUID userId, @RequestBody LinkCardRequest req) {
+    public AccountResponse linkCard(@PathVariable UUID userId, @Valid @RequestBody LinkCardRequest req) {
         Account card = cards.link(userId, req.cardNumber(), req.expiry(), req.cvc());
         AccountsView view = profiles.accounts(userId);
         return AccountResponse.of(card, view.limits().get(card.getId()), false);
@@ -77,7 +82,7 @@ public class UserController {
 
     // «Сердечко»: этот счёт подставляется в «Списать с» по умолчанию
     @PutMapping("/{userId}/default-payment-account")
-    public List<AccountResponse> setDefaultPaymentAccount(@PathVariable UUID userId, @RequestBody DefaultPaymentRequest req) {
+    public List<AccountResponse> setDefaultPaymentAccount(@PathVariable UUID userId, @Valid @RequestBody DefaultPaymentRequest req) {
         cards.setDefaultPaymentAccount(userId, req.accountId());
         return accounts(profiles.accounts(userId));
     }
@@ -89,7 +94,7 @@ public class UserController {
     }
 
     @PutMapping("/{userId}/roundup")
-    public UserResponse.Roundup enableRoundup(@PathVariable UUID userId, @RequestBody RoundupRequest req) {
+    public UserResponse.Roundup enableRoundup(@PathVariable UUID userId, @Valid @RequestBody RoundupRequest req) {
         return UserResponse.Roundup.of(roundup.enable(userId, req.step(), req.fundCode(), req.fundName()));
     }
 
@@ -101,7 +106,7 @@ public class UserController {
 
     // «Ваш счёт в другом банке» для автопополнения по СБП
     @PostMapping("/{userId}/sbp-sources")
-    public AccountResponse sbpSource(@PathVariable UUID userId, @RequestBody SbpSourceRequest req) {
+    public AccountResponse sbpSource(@PathVariable UUID userId, @Valid @RequestBody SbpSourceRequest req) {
         return AccountResponse.of(sbpSources.findOrCreate(userId, req.bankId(), req.bankName()), Limits.NONE, false);
     }
 
@@ -124,19 +129,23 @@ public class UserController {
                 .toList();
     }
 
-    public record LinkCardRequest(String cardNumber, String expiry, String cvc) {
+    // Формат номера, срока и CVC проверяет CardLinkingService (свои тексты ошибок); здесь — только границы
+    public record LinkCardRequest(@NotBlank @Size(max = 30) String cardNumber, @NotBlank @Size(max = 10) String expiry,
+                                  @NotBlank @Size(max = 4) String cvc) {
     }
 
-    public record DefaultPaymentRequest(UUID accountId) {
+    public record DefaultPaymentRequest(@NotNull UUID accountId) {
     }
 
-    public record RoundupRequest(Integer step, String fundCode, String fundName) {
+    public record RoundupRequest(@NotNull Integer step, @NotBlank @Size(max = 40) String fundCode,
+                                 @NotBlank @Size(max = 150) String fundName) {
     }
 
     public record RoundupOptions(List<Integer> steps) {
     }
 
-    public record SbpSourceRequest(String bankId, String bankName) {
+    public record SbpSourceRequest(@NotNull @Pattern(regexp = "\\d{12}", message = "идентификатор банка СБП — 12 цифр") String bankId,
+                                   @NotBlank @Size(max = 100) String bankName) {
     }
 
     public record OperationUsage(OperationType operationType, BigDecimal month) {
