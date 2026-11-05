@@ -2,11 +2,11 @@ package com.paymentsapp.account.profile;
 
 import static com.paymentsapp.account.error.AccountError.USER_NOT_FOUND;
 
+import com.paymentsapp.account.limits.LimitPeriod;
+import com.paymentsapp.account.limits.LimitSource;
 import com.paymentsapp.account.limits.Limits;
 import com.paymentsapp.account.limits.LimitsService;
 import com.paymentsapp.account.limits.OperationType;
-import com.paymentsapp.account.limits.LimitPeriod;
-import com.paymentsapp.account.limits.LimitSource;
 import com.paymentsapp.account.limits.UsageCounters;
 import com.paymentsapp.account.user.Account;
 import com.paymentsapp.account.user.AccountRepository;
