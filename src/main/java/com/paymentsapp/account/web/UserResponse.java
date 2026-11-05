@@ -2,6 +2,7 @@ package com.paymentsapp.account.web;
 
 import com.paymentsapp.account.user.Subscription;
 import com.paymentsapp.account.user.User;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,14 +16,14 @@ public record UserResponse(
         String email,
         Subscription subscription,
         String sbpDefaultBankId,
-        java.util.UUID defaultPaymentAccountId,
+        UUID defaultPaymentAccountId,
         String identificationLevel,
         List<AccountResponse> accounts,
         // «Округление на пользу»; null — выключено
         Roundup roundup
 ) {
 
-    public record Roundup(int step, String fundCode, String fundName, java.time.OffsetDateTime enabledAt) {
+    public record Roundup(int step, String fundCode, String fundName, OffsetDateTime enabledAt) {
 
         static Roundup of(User u) {
             return u.getRoundupStep() == null ? null

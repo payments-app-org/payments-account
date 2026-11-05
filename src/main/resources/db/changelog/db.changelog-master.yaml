@@ -44,3 +44,9 @@ databaseChangeLog:
   - include:
       file: changes/015-outbox-cleanup.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/016-limits-in-db.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/017-legacy-operation-types.sql
+      relativeToChangelogFile: true

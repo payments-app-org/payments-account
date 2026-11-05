@@ -1,10 +1,11 @@
 package com.paymentsapp.account.web;
 
-import com.paymentsapp.account.reservation.AccountLimits;
+import com.paymentsapp.account.limits.Limits;
 import com.paymentsapp.account.user.Account;
 import com.paymentsapp.account.user.AccountStatus;
 import com.paymentsapp.account.user.AccountType;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record AccountResponse(
@@ -24,7 +25,7 @@ public record AccountResponse(
         String cardExpiry,
         // Номер счёта (20 цифр) — для справок; у карт других банков его нет
         String accountNumber,
-        java.time.OffsetDateTime openedAt,
+        OffsetDateTime openedAt,
         Limits limits,
         // Свой счёт в другом банке (EXTERNAL_SBP): идентификатор банка-участника СБП
         String sbpBankId,
@@ -32,15 +33,12 @@ public record AccountResponse(
         boolean credit
 ) {
 
-    static AccountResponse of(Account a, AccountLimits l, boolean defaultForPayments) {
-        Limits limits = l == null ? null : new Limits(l.getMaxPayment(), l.getMaxBalance(), l.getMaxMonthlyTurnover());
+    static AccountResponse of(Account a, Limits l, boolean defaultForPayments) {
+        // Без ограничений — limits: null
+        Limits limits = l == null || l.equals(Limits.NONE) ? null : l;
         // Баланс карты другого банка нам неизвестен
         return new AccountResponse(a.getId(), a.getType(), a.getStatus(), a.getTitle(), a.isExternal() ? null : a.getBalance(),
                 a.available(), a.getCurrency(), a.getCardLast4(), a.getPaymentSystem(), a.isDefault(), defaultForPayments,
                 a.getCardExpiry(), a.getAccountNumber(), a.getCreatedAt(), limits, a.getSbpBankId(), a.isCredit());
-    }
-
-    // null в поле — без ограничения
-    public record Limits(BigDecimal maxPayment, BigDecimal maxBalance, BigDecimal maxMonthlyTurnover) {
     }
 }

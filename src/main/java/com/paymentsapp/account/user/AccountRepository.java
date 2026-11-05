@@ -19,7 +19,11 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     long countByUserIdAndTypeAndStatusNot(UUID userId, AccountType type, AccountStatus status);
 
-    Optional<Account> findByCardNumberAndType(String cardNumber, AccountType type);
+    // Поиск нашей карты по HMAC номера: открытых номеров в базе нет
+    Optional<Account> findByCardNumberHashAndType(String cardNumberHash, AccountType type);
+
+    // Карты, номера которых ещё не защищены (CardNumberMigration)
+    List<Account> findByCardNumberIsNotNull();
 
     Optional<Account> findByUserIdAndTypeAndSbpBankId(UUID userId, AccountType type, String sbpBankId);
 

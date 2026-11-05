@@ -34,6 +34,13 @@ spring:
       ddl-auto: validate
     properties:
       hibernate.default_schema: account
+      # Кэш второго уровня: справочники лимитов (identification_limits, operation_limits, …) и лимиты счетов.
+      # Балансы, счета и резервы не кэшируем.
+      hibernate.cache.use_second_level_cache: true
+      hibernate.cache.use_query_cache: true
+      hibernate.cache.region.factory_class: jcache
+      hibernate.javax.cache.provider: com.github.benmanes.caffeine.jcache.spi.CaffeineCachingProvider
+      hibernate.javax.cache.missing_cache_strategy: create
 
 # Общая библиотека libs/platform
 platform:
@@ -49,3 +56,14 @@ messaging:
     topic: account.reservations
     partitions: 3
     replicas: 1
+
+account:
+  card:
+    # Ключи только из окружения (в compose — из .env); без них сервис не стартует
+    hmac-key: ${CARD_HMAC_KEY}
+    encryption-key: ${CARD_ENCRYPTION_KEY}
+    # Сколько карт других банков можно привязать
+    max-linked: 5
+  roundup:
+    # Шаги «Округления на пользу», ₽ (совпадают с ограничением users_roundup_step_check)
+    steps: [10, 100, 1000]

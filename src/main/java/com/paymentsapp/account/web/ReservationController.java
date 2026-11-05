@@ -1,5 +1,6 @@
 package com.paymentsapp.account.web;
 
+import com.paymentsapp.account.limits.OperationType;
 import com.paymentsapp.account.reservation.Reservation;
 import com.paymentsapp.account.reservation.ReservationService;
 import com.paymentsapp.account.reservation.ReservationStatus;
@@ -51,7 +52,7 @@ public class ReservationController {
             @NotNull UUID userId,
             @NotNull UUID accountId,
             UUID recipientAccountId,
-            @NotBlank String operationType,
+            @NotNull OperationType operationType,
             @NotNull @Positive @Digits(integer = 15, fraction = 2) BigDecimal amount,
             @NotNull @PositiveOrZero @Digits(integer = 15, fraction = 2) BigDecimal commission,
             @NotBlank String currency,

@@ -1,5 +1,6 @@
 package com.paymentsapp.account.user;
 
+// Порядок констант — порядок, в котором счета показываются клиенту
 public enum AccountType {
     WALLET,
     // Карта нашего банка

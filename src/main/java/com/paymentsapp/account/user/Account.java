@@ -30,7 +30,11 @@ public class Account {
     private BigDecimal balance;
     private BigDecimal reserved;
     private String currency;
+    // Номер нашей карты открыто больше не храним: после CardNumberMigration поле пустое
     private String cardNumber;
+    // HMAC номера (поиск получателя по карте) и номер, зашифрованный AES-GCM
+    private String cardNumberHash;
+    private String cardNumberEncrypted;
     private String cardLast4;
     private String sbpBankId;
     private String paymentSystem;
@@ -45,46 +49,66 @@ public class Account {
     protected Account() {
     }
 
+    static final String CURRENCY_RUB = "RUB";
+    static final String LINKED_CARD_TITLE = "Карта другого банка";
+    static final String SBP_SOURCE_TITLE = "Счёт в %s";
+
     // Привязка карты другого банка
-    public static Account linkedCard(UUID userId, String last4, String paymentSystem, String expiry, String fingerprint) {
+    public static Account linkedCard(UUID userId, String last4, String paymentSystem, String expiry, String fingerprint,
+                                     OffsetDateTime now) {
         Account a = new Account();
         a.id = UUID.randomUUID();
         a.userId = userId;
         a.type = AccountType.EXTERNAL_CARD;
         a.status = AccountStatus.ACTIVE;
-        a.title = "Карта другого банка";
+        a.title = LINKED_CARD_TITLE;
         a.balance = BigDecimal.ZERO;
         a.reserved = BigDecimal.ZERO;
-        a.currency = "RUB";
+        a.currency = CURRENCY_RUB;
         a.cardLast4 = last4;
         a.paymentSystem = paymentSystem;
         a.cardExpiry = expiry;
         a.cardFingerprint = fingerprint;
-        a.createdAt = OffsetDateTime.now();
+        a.createdAt = now;
         return a;
     }
 
     // Свой счёт в другом банке — источник автопополнения по СБП
-    public static Account sbpSource(UUID userId, String bankId, String bankName) {
+    public static Account sbpSource(UUID userId, String bankId, String bankName, OffsetDateTime now) {
         Account a = new Account();
         a.id = UUID.randomUUID();
         a.userId = userId;
         a.type = AccountType.EXTERNAL_SBP;
         a.status = AccountStatus.ACTIVE;
-        a.title = "Счёт в " + bankName;
+        a.title = SBP_SOURCE_TITLE.formatted(bankName);
         a.balance = BigDecimal.ZERO;
         a.reserved = BigDecimal.ZERO;
-        a.currency = "RUB";
+        a.currency = CURRENCY_RUB;
         a.sbpBankId = bankId;
-        a.createdAt = OffsetDateTime.now();
+        a.createdAt = now;
         return a;
     }
 
-    // Деньги на привязанной карте и на своём счёте в другом банке мы не ведём: их списывает процессинг
+    // Номер карты: только отпечаток для поиска и шифротекст, открытый номер стираем
+    public void protectCardNumber(String hash, String encrypted) {
+        this.cardNumberHash = hash;
+        this.cardNumberEncrypted = encrypted;
+        this.cardNumber = null;
+    }
+
     public boolean isCredit() {
         return credit;
     }
 
+    public boolean isWallet() {
+        return type == AccountType.WALLET;
+    }
+
+    public boolean isActive() {
+        return status == AccountStatus.ACTIVE;
+    }
+
+    // Деньги на привязанной карте и на своём счёте в другом банке мы не ведём: их списывает процессинг
     public boolean isExternal() {
         return type == AccountType.EXTERNAL_CARD || type == AccountType.EXTERNAL_SBP;
     }

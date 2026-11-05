@@ -1,5 +1,6 @@
 package com.paymentsapp.account.reservation;
 
+import com.paymentsapp.account.limits.OperationType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -7,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -21,7 +23,8 @@ public class Reservation {
     private UUID accountId;
     // Карта нашего клиента-получателя; null — перевод во внешний банк
     private UUID recipientAccountId;
-    private String operationType;
+    @Enumerated(EnumType.STRING)
+    private OperationType operationType;
     private BigDecimal amount;
     private BigDecimal commission;
     private BigDecimal total;
@@ -35,8 +38,8 @@ public class Reservation {
     protected Reservation() {
     }
 
-    public Reservation(UUID paymentId, UUID userId, UUID accountId, UUID recipientAccountId, String operationType,
-                       BigDecimal amount, BigDecimal commission) {
+    public Reservation(UUID paymentId, UUID userId, UUID accountId, UUID recipientAccountId, OperationType operationType,
+                       BigDecimal amount, BigDecimal commission, OffsetDateTime now) {
         this.id = UUID.randomUUID();
         this.paymentId = paymentId;
         this.userId = userId;
@@ -47,7 +50,7 @@ public class Reservation {
         this.commission = commission;
         this.total = amount.add(commission);
         this.status = ReservationStatus.RESERVED;
-        this.createdAt = OffsetDateTime.now();
+        this.createdAt = now;
         this.updatedAt = createdAt;
     }
 
@@ -55,13 +58,13 @@ public class Reservation {
     public boolean sameRequest(UUID userId, UUID accountId, UUID recipientAccountId, BigDecimal amount,
                                BigDecimal commission) {
         return this.userId.equals(userId) && this.accountId.equals(accountId)
-                && java.util.Objects.equals(this.recipientAccountId, recipientAccountId)
+                && Objects.equals(this.recipientAccountId, recipientAccountId)
                 && this.amount.compareTo(amount) == 0 && this.commission.compareTo(commission) == 0;
     }
 
-    void changeStatus(ReservationStatus status) {
+    void changeStatus(ReservationStatus status, OffsetDateTime now) {
         this.status = status;
-        this.updatedAt = OffsetDateTime.now();
+        this.updatedAt = now;
     }
 
     public UUID getId() { return id; }
@@ -69,7 +72,7 @@ public class Reservation {
     public UUID getUserId() { return userId; }
     public UUID getAccountId() { return accountId; }
     public UUID getRecipientAccountId() { return recipientAccountId; }
-    public String getOperationType() { return operationType; }
+    public OperationType getOperationType() { return operationType; }
     public BigDecimal getAmount() { return amount; }
     public BigDecimal getCommission() { return commission; }
     public BigDecimal getTotal() { return total; }

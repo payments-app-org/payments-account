@@ -1,4 +1,4 @@
-package com.paymentsapp.account.reservation;
+package com.paymentsapp.account.limits;
 
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;

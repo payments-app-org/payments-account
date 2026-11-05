@@ -55,11 +55,11 @@ public class User {
     public String getRoundupFundName() { return roundupFundName; }
     public OffsetDateTime getRoundupEnabledAt() { return roundupEnabledAt; }
 
-    public void enableRoundup(int step, String fundCode, String fundName) {
+    public void enableRoundup(int step, String fundCode, String fundName, OffsetDateTime now) {
         this.roundupStep = step;
         this.roundupFundCode = fundCode;
         this.roundupFundName = fundName;
-        this.roundupEnabledAt = OffsetDateTime.now();
+        this.roundupEnabledAt = now;
     }
 
     public void disableRoundup() {
